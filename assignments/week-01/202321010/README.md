@@ -102,7 +102,7 @@ if __name__ == "__main__":
 실행:
 
 ```bash
-python hello.py
+python hello_agent.py
 ```
 
 결과:
