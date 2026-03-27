@@ -1,0 +1,164 @@
+---
+title: "Lab 02: First AI Coding Agent"
+description: Implement an agent with HOTL governance — 4-level risk classification, JSON Lines audit log, policy tests
+week: 2
+difficulty: elementary
+estimated_time: "4 hours"
+assignment_due: "2026-03-17"
+---
+
+import { Steps, Aside, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Elementary" variant="caution" /> <Badge text="Due: 2026-03-17" variant="note" />
+
+## Objectives
+
+- Implement a first agent using the `anthropic` Python SDK
+- Build a HOTL governance layer with 4-level risk classification (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`)
+- Construct a structured audit logging system in JSON Lines format
+- Validate governance logic with policy tests
+
+## Environment Setup
+
+```bash
+mkdir lab-02 && cd lab-02
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install anthropic python-dotenv pytest
+```
+
+## Implementation Requirements
+
+### 1. `governance.py` — Governance Layer
+
+```python
+from enum import Enum
+import json
+import sys
+from datetime import datetime, timezone
+
+
+class ActionRisk(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+    CRITICAL = "critical"
+
+
+def log_action(action: str, risk: ActionRisk, approved: bool,
+               reason: str = "") -> dict:
+    """Records an audit log entry in JSON Lines format."""
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "action": action[:100],
+        "risk": risk.value,
+        "approved": approved,
+        "reason": reason,
+    }
+    with open("audit.jsonl", "a") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    return entry
+
+
+def require_human_approval(action: str) -> bool:
+    """Requests user approval for HIGH risk actions."""
+    print(f"\n⚠️  HIGH RISK ACTION detected:\n{action}\n")
+    response = input("Do you approve? (yes/no): ")
+    return response.lower() == "yes"
+
+
+def governance_check(action: str, risk: ActionRisk) -> bool:
+    """Allows or denies an action based on its risk level."""
+    # CRITICAL: always deny
+    if risk == ActionRisk.CRITICAL:
+        log_action(action, risk, False, reason="CRITICAL auto-denied")
+        print(f"\n🚫 CRITICAL ACTION auto-denied: {action[:50]}")
+        return False
+
+    # HIGH: requires human approval
+    if risk == ActionRisk.HIGH:
+        approved = require_human_approval(action)
+        log_action(action, risk, approved,
+                   reason="human approved" if approved else "human denied")
+        return approved
+
+    # LOW, MEDIUM: auto-approved
+    log_action(action, risk, True, reason="auto-approved")
+    return True
+```
+
+### 2. `agent.py` — Agent Main Loop
+
+Implement a Claude API agent that integrates the governance layer.
+
+### 3. `test_governance.py` — Policy Tests
+
+```python
+# test_governance.py
+import json
+from pathlib import Path
+from governance import ActionRisk, governance_check, log_action
+
+AUDIT_FILE = "audit.jsonl"
+
+
+def setup_function():
+    """Reset audit log before each test."""
+    Path(AUDIT_FILE).unlink(missing_ok=True)
+
+
+def test_critical_always_denied():
+    """CRITICAL risk actions must always be denied."""
+    result = governance_check("rm -rf /", ActionRisk.CRITICAL)
+    assert result is False
+    logs = Path(AUDIT_FILE).read_text().strip().split("\n")
+    entry = json.loads(logs[-1])
+    assert entry["approved"] is False
+    assert entry["risk"] == "critical"
+
+
+def test_low_auto_approved():
+    """LOW risk actions must be auto-approved."""
+    result = governance_check("read file", ActionRisk.LOW)
+    assert result is True
+    logs = Path(AUDIT_FILE).read_text().strip().split("\n")
+    entry = json.loads(logs[-1])
+    assert entry["approved"] is True
+
+
+def test_audit_log_is_jsonl():
+    """Audit log must be valid JSON Lines format."""
+    log_action("test action", ActionRisk.LOW, True)
+    log_action("test action 2", ActionRisk.MEDIUM, True)
+    logs = Path(AUDIT_FILE).read_text().strip().split("\n")
+    assert len(logs) == 2
+    for line in logs:
+        entry = json.loads(line)  # Test fails if parsing fails
+        assert "timestamp" in entry
+        assert "action" in entry
+        assert "risk" in entry
+```
+
+<Steps>
+1. Implement code (`governance.py`, `agent.py`)
+2. Run execution test with `python agent.py`
+3. Verify Hard Interrupt behavior when a HIGH risk action is triggered
+4. Confirm that CRITICAL risk actions are auto-denied
+5. Confirm policy tests pass with `pytest test_governance.py -v`
+6. Verify `audit.jsonl` content is valid JSON Lines
+7. Submit PR
+</Steps>
+
+## Deliverables
+
+Submit a PR to `assignments/lab-02/[student-id]/`:
+
+- [ ] `governance.py` — 4-level risk classification + JSON Lines logging
+- [ ] `agent.py` — Governance-integrated agent
+- [ ] `test_governance.py` — Policy tests (minimum 3)
+- [ ] `audit.jsonl` sample — Minimum 5 action records (valid JSON Lines)
+- [ ] `README.md` — Design decisions and test results
+
+<Aside type="caution" title="Security Consideration">
+To prevent API keys or personal information from being recorded in `audit.jsonl`, limit the `action` field to 100 characters and mask sensitive data.
+</Aside>

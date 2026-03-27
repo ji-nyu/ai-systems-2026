@@ -1,0 +1,310 @@
+---
+title: "Lab 04: Ralph Loop Implementation"
+description: Implement harness.sh, write PROMPT.md/AGENTS.md, Garbage Collection, Backpressure
+week: 4
+difficulty: intermediate
+estimated_time: "6 hours"
+assignment_due: "2026-03-31"
+---
+
+import { Steps, Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Intermediate" variant="tip" /> <Badge text="Due: 2026-03-31" variant="note" />
+
+## Objectives
+
+- Understand and implement the Ralph loop (iterative autonomous coding loop)
+- Control AI coding CLI in non-interactive mode via `harness.sh`
+- Apply `PROMPT.md` + `AGENTS.md` authoring principles
+- Ensure loop stability with Garbage Collection and Backpressure
+
+## Ralph Loop Overview
+
+The Ralph loop is an autonomous coding workflow that operates on a "Run → Assess → Loop → Progress → Halt" cycle. It runs the AI coding CLI in headless mode and uses test results as feedback for iteration.
+
+<div class="diagram">
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">PROMPT.md + AGENTS.md</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Claude Code</span>
+      <span class="diagram__node__sub">Code changes</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">Run Tests</span>
+    </div>
+    <div class="diagram__branch">
+      <div class="diagram__node--green" style="padding:0.625rem 0.75rem;border-radius:0.5rem;border:1px solid rgba(34,197,94,0.25);display:flex;flex-direction:column;align-items:center;gap:0.15rem;font-size:0.8rem;font-weight:600;color:#22C55E;">
+        <span class="diagram__branch__icon">&#10003;</span>
+        <span>Pass</span>
+        <span class="diagram__branch__desc">Done</span>
+      </div>
+      <div class="diagram__node--red" style="padding:0.625rem 0.75rem;border-radius:0.5rem;border:1px solid rgba(239,68,68,0.25);display:flex;flex-direction:column;align-items:center;gap:0.15rem;font-size:0.8rem;font-weight:600;color:#EF4444;">
+        <span class="diagram__branch__icon">&#10007;</span>
+        <span>Fail</span>
+        <span class="diagram__branch__desc">GC &#x2192; Update AGENTS.md &#x2192; Retry</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+## Implementation Requirements
+
+### 1. `PROMPT.md` — Agent Instructions
+
+An effective PROMPT.md clearly defines the role, constraints, and completion criteria.
+
+```markdown
+# Role
+You are an autonomous coding agent. Your task is to make all tests pass
+in the `src/` directory without modifying test files.
+
+**IMPORTANT: Read `AGENTS.md` first** — it contains learned patterns
+from previous iterations and known failure modes.
+
+# Constraints
+- Do NOT modify any file under `tests/`
+- Do NOT install new packages without checking `requirements.txt` first
+- Write minimal, focused changes — do not refactor unrelated code
+- If stuck after 3 attempts on the same error, write your analysis to
+  `fix_plan.md` and stop
+
+# Completion Criteria
+All pytest tests pass. Run `pytest tests/ -q` to verify.
+Write a brief summary to `DONE.md` when complete.
+
+# Working Notes
+- Check `AGENTS.md` for learned patterns and anti-patterns
+- Check `fix_plan.md` for prior analysis before starting
+- Use `git diff` to review your changes before each commit
+- Update `AGENTS.md` with new learnings after each attempt
+```
+
+<Aside type="tip" title="PROMPT.md Authoring Principles">
+Instructions must include specific, verifiable completion criteria. Subjective goals like "write good code" cannot terminate the loop.
+</Aside>
+
+### 2. `AGENTS.md` — Accumulated Learning Log
+
+This file records patterns learned and failure causes as the loop iterates. The agent reads this file at the start of each iteration to avoid repeating the same mistakes.
+
+```markdown
+# AGENTS.md
+
+## Learned Patterns
+- (Agent adds entries after loop runs)
+
+## Anti-Patterns
+- Do not modify files in the tests/ directory
+- Check requirements.txt before installing new packages
+
+## Progress
+- [ ] test_divide_normal — ?
+- [ ] test_divide_zero — ?
+- [ ] test_fibonacci — ?
+```
+
+<Aside type="tip" title="The Role of AGENTS.md">
+`AGENTS.md` is the agent's "long-term memory." Even when the loop reinitializes context on each run, `AGENTS.md` carries forward the lessons of previous attempts. It is the implementation of the "Accumulated Learning" concept from Week 04 theory.
+</Aside>
+
+### 3. `harness.sh` — Loop Harness
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Configuration
+MAX_ITER=${MAX_ITER:-10}
+SLEEP_SEC=${SLEEP_SEC:-5}
+PROMPT_FILE="PROMPT.md"
+LOG_FILE="harness.log"
+PASS_MARKER="DONE.md"
+AI_CLI="${AI_CLI:-claude}"  # Tool selection: claude, gemini, codex
+
+# --- Git initialization (prerequisite for Garbage Collection) ---
+if [ ! -d .git ]; then
+  git init
+  git add -A
+  git commit -m "initial: harness starting point"
+  echo "[harness] Git repository initialized"
+fi
+
+iter=0
+echo "[harness] Ralph loop starting (max ${MAX_ITER} iterations, tool: ${AI_CLI})" | tee "$LOG_FILE"
+
+while [ $iter -lt $MAX_ITER ]; do
+  iter=$((iter + 1))
+  echo "[harness] === Iteration ${iter}/${MAX_ITER} ===" | tee -a "$LOG_FILE"
+
+  # --- Backpressure: throttle token consumption rate ---
+  if [ $iter -gt 1 ]; then
+    echo "[harness] Backpressure wait ${SLEEP_SEC}s..." | tee -a "$LOG_FILE"
+    sleep "$SLEEP_SEC"
+  fi
+
+  # --- Run AI coding CLI in headless mode ---
+  case "$AI_CLI" in
+    claude)
+      claude --print --no-color --dangerously-skip-permissions \
+        "$(cat "$PROMPT_FILE")" 2>&1 | tee -a "$LOG_FILE" ;;
+    gemini)
+      cat "$PROMPT_FILE" | gemini 2>&1 | tee -a "$LOG_FILE" ;;
+    codex)
+      codex --approval-mode full-auto \
+        "$(cat "$PROMPT_FILE")" 2>&1 | tee -a "$LOG_FILE" ;;
+    *)
+      echo "[harness] Unsupported tool: $AI_CLI" | tee -a "$LOG_FILE"
+      exit 1 ;;
+  esac
+
+  # --- Check completion condition ---
+  if [ -f "$PASS_MARKER" ]; then
+    echo "[harness] Completion marker detected — exiting loop" | tee -a "$LOG_FILE"
+    exit 0
+  fi
+
+  # --- Run tests and check results ---
+  if python -m pytest tests/ -q --tb=no 2>/dev/null; then
+    echo "[harness] All tests passed — exiting loop" | tee -a "$LOG_FILE"
+    exit 0
+  fi
+
+  # --- Garbage Collection: roll back failed code changes ---
+  # Preserve learned content in AGENTS.md
+  if [ -f AGENTS.md ]; then
+    cp AGENTS.md /tmp/AGENTS.md.bak
+  fi
+  echo "[harness] GC: rolling back failed changes (git checkout .)" | tee -a "$LOG_FILE"
+  git checkout .
+  if [ -f /tmp/AGENTS.md.bak ]; then
+    cp /tmp/AGENTS.md.bak AGENTS.md
+  fi
+
+  echo "[harness] Tests not passing — proceeding to next iteration" | tee -a "$LOG_FILE"
+done
+
+echo "[harness] Maximum iterations reached — failed" | tee -a "$LOG_FILE"
+exit 1
+```
+
+<Aside type="note" title="Permission Model Differences by Tool">
+- **Claude Code**: `--dangerously-skip-permissions` auto-approves all file operations. Security is maintained via MCP path restrictions.
+- **Codex CLI**: Built-in sandbox for safe auto-execution. No separate permission flags needed.
+- **Gemini CLI**: Non-interactive execution via pipe mode. No separate permission flags.
+</Aside>
+
+<Aside type="caution" title="The Role of Garbage Collection">
+`git checkout .` rolls back code changes from a failed iteration. Without this, the agent piles further modifications on top of the broken code from a previous failure, making the problem more complex. GC ensures each iteration starts from a clean state. `AGENTS.md` is backed up before GC to preserve learned content.
+</Aside>
+
+### 4. Backpressure Mechanism
+
+Backpressure prevents the loop from calling the API excessively or getting stuck in an infinite loop. It is implemented across three layers.
+
+```bash
+# Backpressure enhancement logic to add to harness.sh
+
+# 1. Exponential backoff: increase wait time proportional to failure count
+consecutive_failures=0
+backoff_base=5
+
+# On failure
+consecutive_failures=$((consecutive_failures + 1))
+sleep_time=$((backoff_base * consecutive_failures))
+echo "[harness] Backoff wait ${sleep_time}s..." | tee -a "$LOG_FILE"
+sleep "$sleep_time"
+
+# Reset on success
+consecutive_failures=0
+```
+
+```python
+# backpressure.py — Python helper script
+import time
+import json
+from pathlib import Path
+
+def check_progress(log_file: str = "harness.log") -> dict:
+    """Analyzes the progress status of the last N iterations."""
+    lines = Path(log_file).read_text().splitlines()
+    iterations = [l for l in lines if "Iteration" in l]
+
+    return {
+        "total_iterations": len(iterations),
+        "last_10_lines": lines[-10:],
+        "is_stalled": _detect_stall(lines)
+    }
+
+def _detect_stall(lines: list[str], window: int = 20) -> bool:
+    """Determines a stall if the same error pattern repeats."""
+    recent = lines[-window:]
+    error_lines = [l for l in recent if "ERROR" in l or "FAILED" in l]
+    if len(error_lines) < 3:
+        return False
+    # Stall if the same error repeats 3 or more times
+    return len(set(error_lines)) == 1
+```
+
+### 5. Target Code for the Lab
+
+Use the Ralph loop to fix the following buggy code.
+
+```python
+# src/calculator.py  (contains bugs)
+def divide(a: float, b: float) -> float:
+    return a / b  # ZeroDivisionError not handled
+
+def fibonacci(n: int) -> int:
+    if n <= 0:
+        return 0
+    elif n == 1:
+        return 1
+    return fibonacci(n - 1) + fibonacci(n - 2)  # n=2 case handled, performance issue
+```
+
+```python
+# tests/test_calculator.py  (do not modify)
+import pytest
+from src.calculator import divide, fibonacci
+
+def test_divide_normal():
+    assert divide(10, 2) == 5.0
+
+def test_divide_zero():
+    with pytest.raises(ValueError, match="Cannot divide by zero"):
+        divide(10, 0)
+
+def test_fibonacci():
+    assert fibonacci(10) == 55
+    assert fibonacci(0) == 0
+```
+
+<Steps>
+1. Create the lab directory structure (`src/`, `tests/`, `PROMPT.md`, `AGENTS.md`)
+2. Grant execution permission to `harness.sh`: `chmod +x harness.sh`
+3. Run the loop: `MAX_ITER=5 bash harness.sh`
+4. Check the iteration flow in `harness.log`
+5. Verify GC behavior: check rollback with `git log --oneline`
+6. Confirm that learned content has accumulated in `AGENTS.md`
+7. Review `DONE.md` and the modified `src/calculator.py` after completion
+</Steps>
+
+## Deliverables
+
+Submit a PR to `assignments/lab-04/[student-id]/`:
+
+- [ ] `PROMPT.md` — Includes role/constraints/completion criteria, references `AGENTS.md`
+- [ ] `AGENTS.md` — Accumulated learning log after loop runs (should show at least 2 failures followed by success)
+- [ ] `harness.sh` — Complete implementation with Backpressure + Garbage Collection
+- [ ] `backpressure.py` — Stall detection logic
+- [ ] `harness.log` — Actual execution log (minimum 3 iterations)
+- [ ] `src/calculator.py` — Final version modified by the agent
+- [ ] `README.md` — Record of how many iterations it took to pass tests, GC behavior confirmation, whether a stall occurred
+
+<Aside type="caution" title="--dangerously-skip-permissions">
+The `--dangerously-skip-permissions` flag in `harness.sh` auto-approves all file operations. Make sure to set path restrictions in the MCP server to prevent Claude's access from extending outside the lab directory.
+</Aside>

@@ -1,0 +1,157 @@
+---
+title: AI Coding Tool Selection
+description: Comparison and selection guide for AI coding CLI tools — Claude Code, Gemini CLI, Codex CLI, OpenCode
+---
+
+import { Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+This course uses **Claude Code** as the primary recommended tool, but most labs can also be completed with the alternative tools listed below.
+
+## Tool Comparison
+
+| Item | Claude Code | Gemini CLI | Codex CLI | OpenCode |
+|------|------------|-----------|-----------|----------|
+| **Vendor** | Anthropic | Google | OpenAI | Community (open-source) |
+| **Install** | `pnpm add -g @anthropic-ai/claude-code` | `pnpm add -g @google/gemini-cli` | `pnpm add -g @openai/codex` | `brew install opencode` |
+| **Run** | `claude "prompt"` | `gemini` (interactive) | `codex "prompt"` | `opencode` (TUI) |
+| **Headless** | `claude --print --no-color` | pipe support | `codex --approval-mode full-auto` | `opencode serve` (API) |
+| **MCP Support** | Full | Supported | Not supported | Limited |
+| **Project Instruction File** | `CLAUDE.md` | `GEMINI.md` | `AGENTS.md` | — |
+| **Context Window** | 200K | 1M | 192K | Model-dependent |
+| **Cost** | API key required | Free (1,000 req/day) | ChatGPT Plus or API key | Free (local models available) |
+| **Sandbox** | None | None | Yes (safest) | None |
+
+## Installation
+
+<Tabs>
+  <TabItem label="Claude Code (Recommended)">
+    ```bash
+    pnpm add -g @anthropic-ai/claude-code
+    claude --version
+    ```
+  </TabItem>
+  <TabItem label="Gemini CLI">
+    ```bash
+    pnpm add -g @google/gemini-cli
+    gemini --version
+    ```
+  </TabItem>
+  <TabItem label="Codex CLI">
+    ```bash
+    pnpm add -g @openai/codex
+    codex --version
+    ```
+  </TabItem>
+  <TabItem label="OpenCode">
+    ```bash
+    # macOS
+    brew install opencode
+
+    # or go install
+    go install github.com/opencode-ai/opencode@latest
+    ```
+  </TabItem>
+</Tabs>
+
+## API Key Setup
+
+<Tabs>
+  <TabItem label="Claude Code">
+    ```bash
+    # Anthropic API key (https://console.anthropic.com)
+    export ANTHROPIC_API_KEY="sk-ant-..."
+    ```
+  </TabItem>
+  <TabItem label="Gemini CLI">
+    ```bash
+    # Issued from Google AI Studio (https://aistudio.google.com)
+    # On first run, browser OAuth login, or:
+    export GEMINI_API_KEY="..."
+    ```
+    <Aside type="tip">Gemini CLI offers a free tier (1,000 req/day), so there is no API cost to worry about.</Aside>
+  </TabItem>
+  <TabItem label="Codex CLI">
+    ```bash
+    # OpenAI API key (https://platform.openai.com)
+    export OPENAI_API_KEY="sk-..."
+    ```
+  </TabItem>
+  <TabItem label="OpenCode">
+    ```bash
+    # Set based on your chosen model provider
+    # For OpenAI models:
+    export OPENAI_API_KEY="sk-..."
+    # For local models (Ollama, etc.) no key is needed
+    ```
+  </TabItem>
+</Tabs>
+
+## Headless Mode (for Ralph Loop)
+
+When running a CLI non-interactively inside a Ralph Loop, the commands differ by tool.
+
+<Tabs>
+  <TabItem label="Claude Code">
+    ```bash
+    claude --print --no-color --dangerously-skip-permissions "$(cat PROMPT.md)"
+    ```
+  </TabItem>
+  <TabItem label="Gemini CLI">
+    ```bash
+    cat PROMPT.md | gemini
+    ```
+  </TabItem>
+  <TabItem label="Codex CLI">
+    ```bash
+    codex --approval-mode full-auto "$(cat PROMPT.md)"
+    ```
+    <Aside type="tip">Codex CLI has a built-in sandbox, so it can run safely in automated mode without `--dangerously-skip-permissions`.</Aside>
+  </TabItem>
+  <TabItem label="OpenCode">
+    ```bash
+    # Start in API server mode, then call via curl
+    opencode serve &
+    curl -X POST http://localhost:3000/api/chat \
+      -d "{\"message\": \"$(cat PROMPT.md)\"}"
+    ```
+  </TabItem>
+</Tabs>
+
+## Project Instruction Files
+
+Each tool reads a specific file in the project root to pass project-specific instructions to the agent.
+
+| Tool | File | Location |
+|------|------|----------|
+| Claude Code | `CLAUDE.md` | Project root |
+| Gemini CLI | `GEMINI.md` | Project root |
+| Codex CLI | `AGENTS.md` | Project root |
+| OpenCode | — | No dedicated file |
+
+<Aside type="note" title="Course Recommendations">
+- Lab instructions and code examples in this course are written for **Claude Code**.
+- MCP-related labs (Lab 03) can only be fully completed with **Claude Code or Gemini CLI**.
+- Codex CLI does not support MCP, so Lab 03 must be done with an alternative tool.
+- If using a different tool, translate commands and flags to match that tool's syntax.
+</Aside>
+
+## Tool Abstraction via Environment Variables
+
+When writing scripts that need to support multiple tools, you can use an environment variable pattern.
+
+```bash
+# Select tool via environment variable
+export AI_CLI="${AI_CLI:-claude}"  # default: claude
+
+# Example usage in harness.sh
+case "$AI_CLI" in
+  claude)
+    claude --print --no-color --dangerously-skip-permissions "$(cat PROMPT.md)" ;;
+  gemini)
+    cat PROMPT.md | gemini ;;
+  codex)
+    codex --approval-mode full-auto "$(cat PROMPT.md)" ;;
+  *)
+    echo "Unsupported tool: $AI_CLI" && exit 1 ;;
+esac
+```

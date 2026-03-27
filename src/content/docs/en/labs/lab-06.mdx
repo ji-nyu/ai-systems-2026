@@ -1,0 +1,270 @@
+---
+title: "Lab 06: Instruction Tuning"
+description: Analyze recurring error patterns, systematically improve PROMPT.md, A/B testing
+week: 6
+difficulty: intermediate
+estimated_time: "4 hours"
+assignment_due: "2026-04-14"
+---
+
+import { Steps, Aside, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Intermediate" variant="tip" /> <Badge text="Due: 2026-04-14" variant="note" />
+
+## Objectives
+
+- Extract and classify recurring error patterns from Ralph loop execution logs
+- Systematically improve `PROMPT.md` based on error pattern analysis
+- Compare the performance of two PROMPT.md versions via A/B testing
+
+## What Is Instruction Tuning?
+
+In prompt engineering, "tuning" does not mean touching model weights — it is the process of iteratively improving the instruction file (PROMPT.md) to steer agent behavior in the desired direction. The key is a data-driven approach based on logs.
+
+<div class="diagram">
+  <div class="diagram__chain">
+    <div class="diagram__node diagram__node--red">
+      <span class="diagram__node__label">Analyze harness.log</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">Extract Error Patterns</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Revise PROMPT.md</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">A/B Test</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--green">
+      <span class="diagram__node__label">Iterate</span>
+    </div>
+  </div>
+</div>
+
+## Implementation Requirements
+
+### 1. `log_analyzer.py` — Error Pattern Analyzer
+
+```python
+# log_analyzer.py
+import re
+from collections import Counter
+from pathlib import Path
+from dataclasses import dataclass
+
+@dataclass
+class ErrorPattern:
+    pattern: str
+    count: int
+    examples: list[str]
+    category: str  # "syntax" | "logic" | "timeout" | "api" | "other"
+
+class LogAnalyzer:
+    """Extracts recurring error patterns from harness.log."""
+
+    ERROR_REGEXES = {
+        "syntax": r"SyntaxError|IndentationError|NameError",
+        "logic":  r"AssertionError|assert .+ == .+|FAILED tests/",
+        "timeout": r"TimeoutError|timed out|Killed",
+        "api":    r"anthropic\.APIError|RateLimitError|overloaded",
+    }
+
+    def __init__(self, log_path: str):
+        self.lines = Path(log_path).read_text().splitlines()
+
+    def extract_errors(self) -> list[ErrorPattern]:
+        raw_errors: list[str] = []
+        for i, line in enumerate(self.lines):
+            if any(kw in line for kw in ["ERROR", "FAILED", "Error", "Exception"]):
+                # Collect context including 2 lines before and after
+                ctx_start = max(0, i - 1)
+                ctx_end   = min(len(self.lines), i + 3)
+                raw_errors.append("\n".join(self.lines[ctx_start:ctx_end]))
+
+        # Classify by category
+        categorized: dict[str, list[str]] = {k: [] for k in self.ERROR_REGEXES}
+        categorized["other"] = []
+
+        for err in raw_errors:
+            matched = False
+            for cat, pattern in self.ERROR_REGEXES.items():
+                if re.search(pattern, err):
+                    categorized[cat].append(err)
+                    matched = True
+                    break
+            if not matched:
+                categorized["other"].append(err)
+
+        results = []
+        for cat, errors in categorized.items():
+            if not errors:
+                continue
+            counter = Counter(errors)
+            results.append(ErrorPattern(
+                pattern=cat,
+                count=len(errors),
+                examples=list(counter.most_common(3)),  # Top 3 examples
+                category=cat
+            ))
+        return sorted(results, key=lambda x: x.count, reverse=True)
+
+    def generate_report(self) -> str:
+        patterns = self.extract_errors()
+        lines = ["# Error Pattern Analysis Report\n"]
+        for p in patterns:
+            lines.append(f"## [{p.category.upper()}] — {p.count} occurrences")
+            lines.append(f"\nRepresentative example:\n```\n{p.examples[0][0][:300]}\n```\n")
+        return "\n".join(lines)
+```
+
+### 2. PROMPT.md v1 (Baseline)
+
+```markdown
+# Role
+You are an autonomous coding agent fixing bugs in Python code.
+
+# Task
+Make all pytest tests pass without modifying test files.
+
+# Done
+Write DONE.md when all tests pass.
+```
+
+### 3. PROMPT.md v2 (Improved Version)
+
+After analyzing the problems with v1, add the following elements:
+
+```markdown
+# Role
+You are an autonomous coding agent. Your sole objective is to make all
+pytest tests pass in `tests/`. Do NOT modify test files.
+
+# Before You Start
+1. Read `fix_plan.md` if it exists — contains prior analysis
+2. Run `pytest tests/ -q --tb=short` to see current failures
+3. Read only the files relevant to failing tests
+
+# Coding Rules
+- Change the minimal amount of code needed to fix each failure
+- After each fix, run pytest immediately to verify
+- Do NOT refactor working code
+- Do NOT add new dependencies
+
+# When Stuck (same error 2+ times)
+1. Write your analysis to `fix_plan.md`:
+   - Exact error message
+   - Root cause hypothesis
+   - Two alternative solutions
+2. Try the first alternative
+
+# Completion
+When `pytest tests/ -q` exits 0, write `DONE.md` with:
+- Number of files changed
+- Brief description of each fix
+- Total iterations used
+```
+
+<Aside type="tip" title="Key Differences: v1 vs v2">
+Why v2 is better than v1: (1) instructions to assess the current state before starting, (2) explicit minimal-change principle, (3) escape strategy when the same error repeats, (4) specific format for completion conditions.
+</Aside>
+
+### 4. `ab_test.py` — A/B Test Harness
+
+```python
+# ab_test.py
+import subprocess
+import time
+import json
+from pathlib import Path
+from dataclasses import dataclass, asdict
+
+@dataclass
+class ABResult:
+    variant: str          # "v1" or "v2"
+    iterations: int
+    success: bool
+    duration_sec: float
+    final_test_output: str
+
+def run_variant(prompt_path: str, variant: str, max_iter: int = 8) -> ABResult:
+    """Runs a single variant and returns the result."""
+    # Reset to initial state
+    for f in ["DONE.md", "fix_plan.md", "harness.log"]:
+        Path(f).unlink(missing_ok=True)
+
+    # Restore buggy initial code
+    subprocess.run(["git", "checkout", "src/"], capture_output=True)
+
+    env = {"MAX_ITER": str(max_iter), "PROMPT_FILE": prompt_path}
+    start = time.time()
+
+    result = subprocess.run(
+        ["bash", "harness.sh"],
+        capture_output=True,
+        text=True,
+        env={**__import__("os").environ, **env}
+    )
+    duration = time.time() - start
+
+    # Parse iteration count
+    log = Path("harness.log").read_text() if Path("harness.log").exists() else ""
+    iterations = log.count("=== Iteration")
+
+    # Final test result
+    test_result = subprocess.run(
+        ["python", "-m", "pytest", "tests/", "-q", "--tb=no"],
+        capture_output=True, text=True
+    )
+
+    return ABResult(
+        variant=variant,
+        iterations=iterations,
+        success=test_result.returncode == 0,
+        duration_sec=round(duration, 1),
+        final_test_output=test_result.stdout
+    )
+
+def compare(v1_result: ABResult, v2_result: ABResult):
+    print("\n===== A/B Test Results =====")
+    for r in [v1_result, v2_result]:
+        status = "Success" if r.success else "Failure"
+        print(f"[{r.variant}] {status} | {r.iterations} iterations | {r.duration_sec}s")
+    if v1_result.success and v2_result.success:
+        diff = v1_result.iterations - v2_result.iterations
+        print(f"\nv2 used {abs(diff)} {'fewer' if diff > 0 else 'more'} iterations")
+
+if __name__ == "__main__":
+    r1 = run_variant("prompt_v1.md", "v1")
+    r2 = run_variant("prompt_v2.md", "v2")
+    compare(r1, r2)
+    Path("ab_results.json").write_text(
+        json.dumps([asdict(r1), asdict(r2)], indent=2, ensure_ascii=False)
+    )
+```
+
+<Steps>
+1. Analyze Lab 04's `harness.log` with `log_analyzer.py`
+2. Write `prompt_v2.md` based on the analysis results
+3. Run `python ab_test.py`
+4. Review `ab_results.json` — which version passed the tests faster?
+5. If v2 did not improve, analyze why and draft `prompt_v3.md`
+</Steps>
+
+## Deliverables
+
+Submit a PR to `assignments/lab-06/[student-id]/`:
+
+- [ ] `log_analyzer.py` — Error pattern classification and report generation
+- [ ] `error_report.md` — Output from `log_analyzer.py`
+- [ ] `prompt_v1.md`, `prompt_v2.md` — Two A/B test variants
+- [ ] `ab_test.py` — Automated comparison script
+- [ ] `ab_results.json` — Actual execution results
+- [ ] `README.md` — Analysis of v2 improvements over v1 and proposals for further improvements
+
+<Aside type="note" title="Grading Criteria">
+Rather than simply confirming that v2 is faster than v1, what matters more is explaining with data *why* a particular instruction is more effective.
+</Aside>

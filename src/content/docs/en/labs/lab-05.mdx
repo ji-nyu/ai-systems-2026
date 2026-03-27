@@ -1,0 +1,277 @@
+---
+title: "Lab 05: Context Management"
+description: Integrate a token counter and build a state tracking system (fix_plan.md, claude-progress.txt)
+week: 5
+difficulty: intermediate
+estimated_time: "5 hours"
+assignment_due: "2026-04-07"
+---
+
+import { Steps, Aside, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Intermediate" variant="tip" /> <Badge text="Due: 2026-04-07" variant="note" />
+
+## Objectives
+
+- Implement a counter that tracks Claude API token usage in real time
+- Apply rolling context window techniques to manage long conversations
+- Establish cross-session state persistence using `fix_plan.md` and `claude-progress.txt`
+
+## Why Context Management Matters
+
+Claude's context window (200K tokens) is large but not unlimited. In long Ralph loops or large codebase tasks, context overflow can occur. To prevent this, implement the following three components:
+
+- Token counter: tracks current usage and warns when thresholds are exceeded
+- Context compression: replaces older messages with summaries
+- State files: preserve progress in files even after a session ends
+
+## Implementation Requirements
+
+### 1. `token_counter.py` — Token Counter
+
+```python
+# token_counter.py
+import anthropic
+from dataclasses import dataclass, field
+from typing import Literal
+
+@dataclass
+class TokenUsage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+    @property
+    def total(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+    @property
+    def cost_usd(self) -> float:
+        # Based on Claude Sonnet 4 pricing (March 2026)
+        input_cost  = self.input_tokens  * 3.0 / 1_000_000
+        output_cost = self.output_tokens * 15.0 / 1_000_000
+        cache_read  = self.cache_read_tokens * 0.3 / 1_000_000
+        return input_cost + output_cost + cache_read
+
+    def __add__(self, other: "TokenUsage") -> "TokenUsage":
+        return TokenUsage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cache_read_tokens=self.cache_read_tokens + other.cache_read_tokens,
+            cache_write_tokens=self.cache_write_tokens + other.cache_write_tokens,
+        )
+
+
+class TokenCounter:
+    CONTEXT_LIMIT = 200_000
+    WARN_THRESHOLD = 0.80  # Warn when exceeding 80%
+
+    def __init__(self):
+        self.session_usage = TokenUsage()
+        self.turn_history: list[TokenUsage] = []
+
+    def record(self, response: anthropic.types.Message) -> TokenUsage:
+        usage = TokenUsage(
+            input_tokens=response.usage.input_tokens,
+            output_tokens=response.usage.output_tokens,
+            cache_read_tokens=getattr(response.usage, "cache_read_input_tokens", 0),
+            cache_write_tokens=getattr(response.usage, "cache_creation_input_tokens", 0),
+        )
+        self.session_usage = self.session_usage + usage
+        self.turn_history.append(usage)
+        self._check_threshold(response.usage.input_tokens)
+        return usage
+
+    def _check_threshold(self, current_input: int):
+        ratio = current_input / self.CONTEXT_LIMIT
+        if ratio > self.WARN_THRESHOLD:
+            print(
+                f"[WARNING] Context usage at {ratio:.1%} "
+                f"({current_input:,} / {self.CONTEXT_LIMIT:,} tokens) — compression recommended"
+            )
+
+    def report(self) -> str:
+        lines = [
+            "=== Token Usage Summary ===",
+            f"Total input tokens:   {self.session_usage.input_tokens:>10,}",
+            f"Total output tokens:  {self.session_usage.output_tokens:>10,}",
+            f"Cache reads:          {self.session_usage.cache_read_tokens:>10,}",
+            f"Estimated cost (USD): ${self.session_usage.cost_usd:>9.4f}",
+            f"Accumulated turns:    {len(self.turn_history):>10}",
+        ]
+        return "\n".join(lines)
+```
+
+### 2. `context_manager.py` — Rolling Window
+
+```python
+# context_manager.py
+import anthropic
+from token_counter import TokenCounter
+
+class ContextManager:
+    """Manages message history using a rolling window approach."""
+
+    MAX_MESSAGES = 20       # Maximum number of messages to retain
+    COMPRESS_ABOVE = 15     # Compress old messages when exceeding this count
+
+    def __init__(self, client: anthropic.Anthropic):
+        self.client = client
+        self.messages: list[dict] = []
+        self.counter = TokenCounter()
+        self.compressed_count = 0
+
+    def add_user(self, content: str):
+        self.messages.append({"role": "user", "content": content})
+
+    def call(self, system: str = "") -> str:
+        if len(self.messages) > self.COMPRESS_ABOVE:
+            self._compress_old_messages()
+
+        kwargs = {
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 4096,
+            "messages": self.messages,
+        }
+        if system:
+            kwargs["system"] = system
+
+        response = self.client.messages.create(**kwargs)
+        self.counter.record(response)
+
+        assistant_msg = response.content[0].text
+        self.messages.append({"role": "assistant", "content": assistant_msg})
+        return assistant_msg
+
+    def _compress_old_messages(self):
+        """Replaces older messages with a summary."""
+        keep_recent = 6  # Keep the most recent 6 messages intact
+        old = self.messages[:-keep_recent]
+        recent = self.messages[-keep_recent:]
+
+        summary_prompt = (
+            "Summarize the following conversation in 3-5 sentences. "
+            "Focus on key decisions and bugs found:\n\n"
+            + "\n".join(
+                f"[{m['role']}]: {m['content'][:200]}" for m in old
+            )
+        )
+        response = self.client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=512,
+            messages=[{"role": "user", "content": summary_prompt}]
+        )
+        summary = response.content[0].text
+        self.compressed_count += len(old)
+
+        self.messages = [
+            {"role": "user", "content": f"[Previous conversation summary]\n{summary}"},
+            {"role": "assistant", "content": "I have reviewed the previous context. Continuing."},
+            *recent
+        ]
+        print(f"[ContextManager] Compressed {len(old)} messages (total compressed: {self.compressed_count})")
+```
+
+### 3. State Tracking File System
+
+A file-based state system that preserves progress even if the Ralph loop is interrupted.
+
+```python
+# state_tracker.py
+import json
+from datetime import datetime
+from pathlib import Path
+
+class StateTracker:
+    """Saves and restores state across sessions using files."""
+
+    def __init__(self, base_dir: str = "."):
+        self.base = Path(base_dir)
+        self.progress_file = self.base / "claude-progress.txt"
+        self.fix_plan_file = self.base / "fix_plan.md"
+
+    def save_progress(self, iteration: int, status: str, notes: str = ""):
+        timestamp = datetime.now().isoformat()
+        entry = f"[{timestamp}] iter={iteration} status={status}"
+        if notes:
+            entry += f"\n  Notes: {notes}"
+        entry += "\n"
+
+        with open(self.progress_file, "a") as f:
+            f.write(entry)
+
+    def load_progress(self) -> list[str]:
+        if not self.progress_file.exists():
+            return []
+        return self.progress_file.read_text().splitlines()
+
+    def save_fix_plan(self, error: str, analysis: str, next_steps: list[str]):
+        error_block = "~~~\n" + error + "\n~~~"
+        steps_block = "\n".join(f"- {s}" for s in next_steps)
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+        content = f"# Fix Plan\nUpdated: {timestamp}\n\n## Current Error\n{error_block}\n\n## Analysis\n{analysis}\n\n## Next Steps\n{steps_block}\n"
+        self.fix_plan_file.write_text(content)
+
+    def load_fix_plan(self) -> str | None:
+        if not self.fix_plan_file.exists():
+            return None
+        return self.fix_plan_file.read_text()
+
+    def get_last_status(self) -> str:
+        lines = self.load_progress()
+        return lines[-1] if lines else "no prior progress"
+```
+
+### 4. Integration Exercise
+
+Write a main script that connects the three modules above.
+
+```python
+# main.py
+import anthropic
+from token_counter import TokenCounter
+from context_manager import ContextManager
+from state_tracker import StateTracker
+
+client = anthropic.Anthropic()
+ctx = ContextManager(client)
+tracker = StateTracker()
+
+# Load previous session state
+prior = tracker.load_fix_plan()
+if prior:
+    ctx.add_user(f"fix_plan.md from the previous session:\n{prior}\n\nPlease continue using this plan.")
+else:
+    ctx.add_user("Please make all tests in the tests/ directory pass.")
+
+for i in range(5):
+    response = ctx.call(system="You are an autonomous coding agent.")
+    tracker.save_progress(i + 1, "running", response[:100])
+    print(f"\n--- Turn {i+1} ---\n{response[:300]}")
+
+print("\n" + ctx.counter.report())
+```
+
+<Steps>
+1. Implement the three modules (`token_counter.py`, `context_manager.py`, `state_tracker.py`)
+2. Run `main.py` and confirm that `claude-progress.txt` is created
+3. Interrupt with Ctrl+C during execution, then re-run — confirm previous state is restored
+4. After 20+ turns, confirm compression behavior
+5. Check the cost in the `counter.report()` output
+</Steps>
+
+## Deliverables
+
+Submit a PR to `assignments/lab-05/[student-id]/`:
+
+- [ ] `token_counter.py` — `TokenUsage`, `TokenCounter` classes
+- [ ] `context_manager.py` — Rolling window and compression logic
+- [ ] `state_tracker.py` — `fix_plan.md`, `claude-progress.txt` management
+- [ ] `main.py` — Execution example connecting the three modules
+- [ ] `claude-progress.txt` — Actual execution results (minimum 5 entries)
+- [ ] `README.md` — Analysis of when context compression occurred and token usage summary
+
+<Aside type="tip" title="Cache Utilization">
+When reusing the same system prompt repeatedly, enabling prompt caching with the `cache_control` parameter can reduce costs by up to 90%.
+</Aside>

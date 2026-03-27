@@ -1,0 +1,119 @@
+---
+title: "Week 11: High-Throughput Inference Optimization with vLLM"
+description: CUDA optimization, PagedAttention, batch processing — operating a production LLM server
+week: 11
+phase: 4
+phase_title: Open-Source Models & MLOps
+date: "2026-05-12"
+theory_topics:
+  - PagedAttention algorithm
+  - CUDA memory optimization
+  - Batch processing and scheduling
+lab_topics:
+  - vLLM configuration optimization
+  - Multi-model serving
+assignment: "Ongoing practicum (Lab 11 preparation)"
+assignment_due: "2026-05-19"
+difficulty: advanced
+estimated_time: "6 hours"
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 4</span>
+  <Badge text="Week 11" variant="note" />
+  <Badge text="Advanced" variant="danger" />
+</div>
+
+## Theory
+
+### PagedAttention: vLLM's Core Innovation
+
+Traditional LLM inference allocates the KV cache (Key-Value Cache) as contiguous memory blocks, resulting in severe memory waste. vLLM's **PagedAttention** applies the OS virtual memory paging concept to the KV cache.
+
+<div class="diagram">
+  <div class="diagram__compare">
+    <div class="diagram__node--red" style="padding:0.875rem 1rem;border-radius:0.625rem;border:1px solid rgba(239,68,68,0.25);">
+      <span class="diagram__compare__label" style="color:#EF4444;">Traditional Approach</span>
+      <span class="diagram__node__label" style="font-size:0.85rem;">[KV Cache: 100% reserved]</span>
+      <span class="diagram__node__sub">Actual usage: 30% &#x2192; Wasted: 70%</span>
+    </div>
+    <div class="diagram__node--green" style="padding:0.875rem 1rem;border-radius:0.625rem;border:1px solid rgba(34,197,94,0.25);">
+      <span class="diagram__compare__label" style="color:#22C55E;">PagedAttention</span>
+      <span class="diagram__node__label" style="font-size:0.85rem;">[Block 1] [Block 2] [Block 3]</span>
+      <span class="diagram__node__sub">Dynamic allocation as needed &#x2192; Wasted: ~4%</span>
+    </div>
+  </div>
+</div>
+
+### vLLM Optimization Configuration
+
+```python
+# Production vLLM configuration
+from vllm import LLM, SamplingParams
+
+llm = LLM(
+    model="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+    # Memory settings
+    gpu_memory_utilization=0.90,  # Use 90% of GPU memory
+    max_model_len=32768,
+    # Performance optimization
+    enable_prefix_caching=True,   # Cache repeated prompts
+    enable_chunked_prefill=True,  # Chunked prefill
+    # MIG environment
+    tensor_parallel_size=1,       # 1 MIG slice
+)
+
+# Batch processing
+requests = [
+    "Implement quicksort in Python",
+    "Implement binary search in JavaScript",
+    "Implement an HTTP server in Go",
+]
+
+sampling_params = SamplingParams(
+    temperature=0.1,  # Low temperature for code generation
+    top_p=0.9,
+    max_tokens=1024,
+)
+
+outputs = llm.generate(requests, sampling_params)
+```
+
+<Aside type="tip" title="Leveraging Prefix Caching">
+In the Ralph Loop, the system prompt (PROMPT.md) is identical on every loop iteration.
+Setting `enable_prefix_caching=True` reuses the system prompt KV cache, improving throughput by 2–5x.
+</Aside>
+
+### Multi-Model Serving Across MIG Slices
+
+```bash
+# Student A: Qwen3-Coder (MIG slice 1, 3g.40gb)
+CUDA_VISIBLE_DEVICES=MIG-GPU-xxx python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen3-Coder-32B-Instruct --port 8001
+
+# Student B: GLM-4.7 (MIG slice 2, 3g.40gb)
+CUDA_VISIBLE_DEVICES=MIG-GPU-yyy python -m vllm.entrypoints.openai.api_server \
+  --model THUDM/glm-4-9b-chat --port 8002
+
+# Student C: DeepSeek-Coder-V2-Lite (MIG slice 3, 2g.20gb)
+CUDA_VISIBLE_DEVICES=MIG-GPU-zzz python -m vllm.entrypoints.openai.api_server \
+  --model deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct --port 8003
+```
+
+## Practicum
+
+<Steps>
+1. **Apply vLLM Optimization Settings** — Compare configurations for `gpu_memory_utilization` and `enable_prefix_caching`
+
+2. **Implement Batch Processing** — Handle concurrent requests and measure throughput
+
+3. **Verify Prefix Caching Effect** — Measure cache hit rate using a Ralph Loop simulation
+
+4. **Performance Profiling** — Monitor GPU utilization with `nvidia-smi dmon`
+</Steps>
+
+## Preview of Next Week
+
+In Week 12, we will build a **telemetry system** on top of this vLLM server and implement an **LLM-as-Judge** evaluation framework.

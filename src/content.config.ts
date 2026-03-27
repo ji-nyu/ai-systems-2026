@@ -15,7 +15,7 @@ export const collections = {
         lab_topics: z.array(z.string()).optional(),
         assignment: z.string().optional(),
         assignment_due: z.string().optional(),
-        difficulty: z.enum(['입문', '초급', '중급', '고급']).optional(),
+        difficulty: z.enum(['입문', '초급', '중급', '고급', 'beginner', 'elementary', 'intermediate', 'advanced']).optional(),
         estimated_time: z.string().optional(),
       }),
     }),

@@ -1,0 +1,136 @@
+---
+title: "Week 7: Multi-Agent SDLC Design"
+description: Comparing traditional and agentic software development lifecycles — role-based architecture design
+week: 7
+phase: 3
+phase_title: Multi-Agent SDLC
+date: "2026-04-14"
+theory_topics:
+  - Traditional SDLC vs Agentic SDLC
+  - Designing agent role assignments
+  - Managing tool access permissions via MCP
+lab_topics:
+  - Designing a multi-agent pipeline
+  - Passing artifacts between agents
+assignment: "Lab 07: Multi-Agent Pipeline Design"
+assignment_due: "2026-04-21"
+difficulty: advanced
+estimated_time: "7 hours"
+---
+
+import { Aside, Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 3</span>
+  <Badge text="Week 7" variant="note" />
+  <Badge text="Advanced" variant="danger" />
+</div>
+
+## Theory
+
+### Traditional SDLC → Agentic SDLC
+
+| Traditional Role | Agentic Equivalent | Tool Access (MCP) |
+|------------------|-------------------|-------------------|
+| Product Manager | Planner Agent | Web search, document reading |
+| Software Architect | Initializer Agent | Repository mapping, Git branching |
+| Developer | Coder Agent (Ralph Loop) | File editing, compiler |
+| QA Engineer | QA Agent | pytest, diff viewer |
+| DevOps | Deploy Agent | Docker, Kubernetes |
+
+### Multi-Agent Pipeline Architecture
+
+<div class="diagram">
+  <div class="diagram__title">MULTI-AGENT PIPELINE</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--purple">
+      <span class="diagram__node__label">Human (HIC)</span>
+      <span class="diagram__node__sub">Requirements input</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Planner Agent</span>
+      <ul><li>Parse requirements</li><li>Generate spec.md</li><li>Determine priorities</li></ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">Pass spec.md</span></div>
+    <div class="diagram__node diagram__node--gray">
+      <span class="diagram__node__label">Initializer Agent</span>
+      <ul><li>Analyze codebase</li><li>Decompose subtasks</li><li>Generate init.sh</li></ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">Pass task_queue.json</span></div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">Coder Agent × N (Ralph Loop)</span>
+      <ul><li>Execute tasks in parallel</li><li>Must pass local tests</li></ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">Create PR</span></div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">QA Agent</span>
+      <ul><li>Independent code review</li><li>Run integration tests</li><li>Regression verification</li></ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">Approve/Reject</span></div>
+    <div class="diagram__node diagram__node--red">
+      <span class="diagram__node__label">Deploy Agent</span>
+      <ul><li>Staging deployment</li><li>E2E tests</li><li>Human final approval (Hard Interrupt)</li></ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--green">
+      <span class="diagram__node__label">Production Deployment</span>
+    </div>
+  </div>
+</div>
+
+<Aside type="caution" title="Golden Rule of Inter-Agent Communication">
+Communication between agents must always occur through **structured artifacts** (Markdown, JSON).
+Having Agent A send direct messages to Agent B maximizes non-determinism.
+</Aside>
+
+### Artifact-Based Handoff Design
+
+```json
+// task_queue.json — Initializer → Coder handoff
+{
+  "project": "calculator-app",
+  "tasks": [
+    {
+      "id": "task-001",
+      "description": "Implement add() function",
+      "target_file": "calculator.py",
+      "test_file": "tests/test_calculator.py",
+      "acceptance_criteria": ["All pytest tests pass", "Type hints included"],
+      "status": "pending"
+    }
+  ]
+}
+```
+
+## Practicum
+
+<Steps>
+1. **Role Assignment Design**
+
+   Given a project specification, design the roles and responsibilities of 4 agents.
+
+2. **Define Artifact Schemas**
+
+   Define the JSON schema for every artifact passed between agents.
+
+3. **Pipeline Prototype**
+
+   Actually implement and test a 2-stage Planner → Coder pipeline.
+</Steps>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 07: Multi-Agent Pipeline Design
+
+**Submission deadline**: 2026-04-21 23:59
+
+**Requirements**:
+1. 5-stage multi-agent architecture diagram
+2. JSON schema definitions for inter-agent artifacts
+3. Planner → Coder 2-stage pipeline implementation
+4. Execution logs and performance analysis
+
+</div>

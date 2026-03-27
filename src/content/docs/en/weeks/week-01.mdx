@@ -1,0 +1,522 @@
+---
+title: "Week 1: The AI Systems Paradigm Shift"
+description: From AI models to AI systems — HITL/HOTL/HIC governance and the dawn of the agentic era
+week: 1
+phase: 1
+phase_title: Foundations of Agentic Systems
+date: "2026-03-03"
+theory_topics:
+  - AI Models vs AI Systems — the nature of the paradigm shift
+  - HITL → HOTL → HIC governance architecture
+  - The agentic AI industry landscape and the AI coding tools ecosystem
+  - Harness engineering — the core hypothesis of this course
+lab_topics:
+  - Setting up the development environment
+  - Installing and running AI coding CLI tools for the first time
+assignment: "Lab 01: Development Environment Setup"
+assignment_due: "2026-03-10"
+difficulty: beginner
+estimated_time: 3 hours
+---
+
+import { Aside, Steps, Tabs, TabItem, Card, CardGrid, Badge } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 1</span>
+  <Badge text="Week 1" variant="note" />
+  <Badge text="Beginner" variant="success" />
+  <Badge text="Lecture: 2026-03-03" variant="default" />
+</div>
+
+## Theory
+
+### Learning Objectives
+
+<CardGrid>
+  <Card title="Conceptual Perspective" icon="open-book">
+    Explain the difference between AI models and AI systems using the EU AI Act definition, and apply the "engine vs. automobile" analogy.
+  </Card>
+  <Card title="Governance Perspective" icon="seti:shield">
+    Distinguish between the three stages of HITL → HOTL → HIC architecture using real-world examples.
+  </Card>
+  <Card title="Industry Perspective" icon="rocket">
+    Understand the landscape of the 2025–2026 agentic AI tools ecosystem and the key benchmarks.
+  </Card>
+  <Card title="Methodology Perspective" icon="seti:code">
+    Grasp the core principles of harness engineering and survey the full arc of the 15-week course.
+  </Card>
+</CardGrid>
+
+---
+
+### Part 1: From AI Models to AI Systems
+
+#### The Paradigm Shift — What Has Changed
+
+The AI industry reached a fundamental inflection point in 2025–2026. The era of using LLMs as simple text-generation tools has ended, and **autonomous agentic systems** have become mainstream in software development.
+
+<CardGrid>
+  <Card title="Before (2023–2024)" icon="close">
+    - LLM = code suggestion tool (Copilot)
+    - Humans review and approve all code
+    - AI as a passive "oracle"
+    - SWE-bench Verified success rate ~5%
+  </Card>
+  <Card title="After (2025–2026)" icon="approve-check-circle">
+    - LLM = autonomous execution agent
+    - Humans as strategic supervisors
+    - AI directly modifies files, runs tests, and deploys
+    - SWE-bench Verified success rate 79.2% (Claude Opus 4.6 Thinking)
+  </Card>
+</CardGrid>
+
+The numbers make the scale of the transition clear:
+
+- **SWE-bench Verified**: ~5% in 2023 → 79.2% in 2026. The ability to autonomously resolve real GitHub issues grew 16× in just three years.
+- **METR "Moore's Law"**: The time horizon of tasks that AI agents can handle is doubling approximately every seven months.
+- **Gartner forecast**: By mid-2026, 40% of enterprise applications are projected to embed AI agents.
+- **Timeline**: GitHub Copilot launch (2021) → autonomous agent era begins (2025) → integration into production pipelines (2026).
+
+<Aside type="tip" title="The Starting Point of This Course">
+The problem is not AI **capability**. Capability has gone from 5% to 79% in three years — that's already sufficient. The problem is **control**. This course teaches you to design that control.
+</Aside>
+
+#### AI Models vs AI Systems — The Engine and the Automobile
+
+"AI models" and "AI systems" are different things. Understanding this distinction is the first gate of this course.
+
+**EU AI Act (2024) definition**: An AI system is "a machine-based system that operates with varying levels of autonomy and that, based on machine- or human-provided inputs, infers from its inputs how to generate outputs such as predictions, recommendations, decisions, or content" (Article 3).
+
+**NIST AI RMF 1.0 definition**: "An engineered system that generates predictions, recommendations, or decisions for a given set of objectives."
+
+One analogy to keep in mind: **a model is an engine, a system is an automobile.** The engine (LLM) provides the power, but it alone cannot reach a destination. You need steering (planning), brakes (safety), navigation (memory), and a dashboard (observability) to make it an automobile.
+
+The **7 components of an AI system**:
+
+| # | Component | Role | Analogy |
+|---|-----------|------|---------|
+| 1 | **Foundation Model** | Reasoning engine | Engine |
+| 2 | **Tool Use / APIs** | External action capability | Wheels and steering |
+| 3 | **Memory** | Short-term context + long-term knowledge | Black box + GPS history |
+| 4 | **Planning / Reasoning** | Task decomposition, goal ordering | Navigation |
+| 5 | **Execution Environment** | Sandbox, containers | Roads and lanes |
+| 6 | **Safety / Guardrails** | Policies, constraints, human oversight | Brakes and airbags |
+| 7 | **Observability** | Logging, evaluation, feedback loops | Dashboard and dashcam |
+
+This is why the EU AI Act regulates models and systems under **separate rules**. The safety of an engine alone (model regulation) and the safety of the whole automobile (system regulation) are evaluated on different criteria. No matter how good the engine, a car without brakes is dangerous.
+
+<Aside type="note" title="What We Build in This Course">
+Over 15 weeks, we are not building the engine (Foundation Model). We are **designing and assembling the other 6 components**. The model already exists — our job is to wrap it into a safe and useful system.
+</Aside>
+
+#### The Bitter Lesson and Test-Time Compute
+
+Let's establish the theoretical roots of this course.
+
+Rich Sutton's **Bitter Lesson** (2019): "General methods that leverage computation are ultimately the most effective, and by a large margin."
+
+This principle explains the two axes of AI progress:
+
+- **Pre-training scaling** (GPT-3 → GPT-4): The "learning" side of the Bitter Lesson. More data, larger models.
+- **Test-Time Compute Scaling** (o1, DeepSeek R1): The "search" side. Making already-trained models think longer at inference time.
+
+The Ralph Loop and autoresearch we cover in Week 4 are **external loop implementations** of test-time compute. Instead of thinking deeper inside the model, the external harness repeatedly calls the model and verifies results. The principle is the same, but control belongs to us.
+
+---
+
+### Part 2: HITL → HOTL → HIC Governance Architecture
+
+#### Detailed Comparison of the Three Architectures
+
+| | HITL (Human-in-the-Loop) | HOTL (Human-on-the-Loop) | HIC (Human-in-Command) |
+|---|--------------------------|--------------------------|------------------------|
+| **Human role** | Sequential gatekeeper | Real-time monitoring, exception intervention | Setting strategy and boundary conditions |
+| **AI autonomy** | Low — approval required at each step | Medium — autonomous execution, alerts on anomalies | High — tactical execution delegated |
+| **Speed** | Low (human is the bottleneck) | High (parallel processing possible) | Maximum (asynchronous work possible) |
+| **Risk level** | Lowest (all actions verified) | Medium (monitoring gaps possible) | Context-dependent |
+| **Regulatory requirement** | EU AI Act high-risk baseline | Telemetry + audit logs mandatory | Documentation of boundary conditions required |
+| **Real-world example** | Production DB migration | CI/CD pipeline, AI code generation | Enterprise AI strategy, this course's Ralphthon |
+| **Analogy** | Manual transmission | Cruise control | Self-driving level 4 |
+
+<Aside type="note" title="Human-in-Command (HIC)">
+A concept above HOTL, where humans set **overall strategy and boundary conditions** while AI executes. The ultimate goal of this course is to produce HIC engineers.
+</Aside>
+
+The three architectures are not mutually exclusive. Within a single system, different levels apply depending on the risk level of each task. For example, with the same AI coding agent:
+- Reading files → **HOTL** (autonomous execution, log only)
+- Writing files → **HITL** (execute after human approval)
+- Deciding overall project architecture → **HIC** (human sets direction)
+
+#### The EU AI Act and Human Oversight
+
+The EU AI Act (2024) has become the global standard for AI governance. Let's cover the key provisions.
+
+**Article 14 — Human Oversight obligations**:
+1. **Preventing automation bias**: Design to prevent human supervisors from uncritically accepting AI outputs
+2. **Ability to disregard AI output**: Supervisors must be able to override or reverse AI decisions at any time
+3. **Emergency stop mechanism**: High-risk systems must include a means of immediate shutdown
+
+Related international standards are also being rapidly established:
+- **ISO/IEC 42001**: International standard for AI Management Systems (AIMS) — the ISO 9001 of AI governance
+- **NIST AI Agent Standards Initiative** (launched 2025–2026): Standards work dedicated to agent systems
+
+South Korea's **AI Framework Act** (effective January 2026) is more innovation-friendly than the EU AI Act, but shares the principle of human oversight for high-risk AI. We'll compare the implementation-level differences between the two laws in detail in Week 2.
+
+#### Governance Necessity Seen Through Real Data
+
+Let's look at the need for governance not through abstract principles, but through data.
+
+**METR Study (July 2025, arXiv 2507.09089)**: A randomized controlled experiment with 16 skilled developers completing 246 real-world tasks. The results were surprising.
+
+- Using AI tools made task completion **19% slower** (while participants perceived themselves as 20% faster)
+- A **39 percentage point gap** existed between developers' self-assessments and actual performance
+
+The core cause of this phenomenon is the "Babysitting Tax." The cost of reviewing, fixing, and debugging AI-generated code exceeded the cost of writing it directly. A 2025 CodeRabbit analysis also found that AI-generated PRs had ~1.7× the issue rate.
+
+Anthropic's 2026 report shows a balanced picture: developers use AI for **60%** of their work, but fully delegated work (AI from start to finish) accounts for only **0–20%**.
+
+<Aside type="caution" title="Key Lesson">
+It's not "AI makes things faster." It's **"the right harness makes AI safely faster."** Reducing the Babysitting Tax is the core motivation for harness engineering.
+</Aside>
+
+---
+
+### Part 3: The Agentic AI Tools Ecosystem 2025–2026
+
+#### Map of the AI Coding Tools Landscape
+
+The AI coding tools market has grown to USD 34.58B as of 2026. It divides into three categories by architecture:
+
+**Terminal-native** — suited for headless automation:
+- **Claude Code** (Anthropic) — deep integration with the MCP ecosystem, autonomous loop execution via `/loop`
+- **Gemini CLI** (Google) — direct access to Gemini models, OAuth authentication
+- **Codex CLI** (OpenAI) — built-in sandboxed execution environment
+- **OpenCode** — open-source, multi-model support
+
+**AI-native IDEs** — editor integration, visual context:
+- **Cursor** — VS Code fork, codebase indexing
+- **Windsurf** — agentic IDE, flow-based tasks
+
+**Cloud-native** — remote execution, asynchronous tasks:
+- **Codex** (OpenAI cloud) — asynchronous task execution in cloud sandbox
+- **Devin** (Cognition) — full-stack autonomous agent
+
+The top 3 tools (GitHub Copilot, Claude Code, Cursor) hold 70%+ market share, and MCP (Model Context Protocol) has emerged as the common protocol for tool integration: 97M+ monthly SDK downloads, 6,400+ registered servers.
+
+#### Key Benchmarks and Capability Indicators
+
+Knowing the benchmarks for actual agent capabilities helps you distinguish real performance from inflated marketing claims.
+
+**SWE-bench Verified** — benchmark for autonomously resolving real GitHub issues:
+- Early 2024: top systems ~15%
+- Late 2025: surpassing 50%
+- Early 2026: 79.2% (Claude Opus 4.6 Thinking)
+
+Real-world data is also accumulating:
+- **Devin**: Initial 15% success rate (Answer.AI test) → 67% PR merge rate by late 2025
+- **Factory.ai**: Deployed to 5,000+ EY engineers, validated at production scale
+- **Rakuten**: 7 hours of autonomous work on a 12.5M line codebase, reporting 99.9% accuracy
+
+#### The Rise of Open-Source AI Coding Tools
+
+A notable 2026 development is that open-source models have approached commercial-level quality. Of the 204 AI coding tools currently tracked, 95% are open-source.
+
+Key open-source coding models:
+- **Qwen3-Coder** (235B MoE, 22B active) — approaches commercial models on SWE-bench, Apache 2.0
+- **DeepSeek V3** (685B MoE, 37B active) — top-tier for math, reasoning, and coding with maximum cost efficiency
+- **GLM-4.7** (32B Dense) — can run on a single GPU, Interleaved Thinking
+
+Why we deploy open-source models in this course: **cost**, **privacy** (campus data stays local), and **customizability** (tuned to our learning environment). In Weeks 10–11 we deploy these models on the DGX H100 server.
+
+#### From "Prompt Engineering" to "Systems Engineering"
+
+The way we work with AI is rapidly evolving:
+
+| Period | Paradigm | Core Skill |
+|--------|----------|------------|
+| 2023 | Single prompt | Prompt engineering |
+| 2024 | RAG pipelines | Retrieval-augmented generation, vector DBs |
+| 2025 | Agent systems | Tool use, multi-agent |
+| 2026 | Harness engineering | Loops, governance, observability |
+
+Andrej Karpathy's **"Software 3.0"** vision summarizes this shift: programmers move from directly writing code to becoming **conductors** of AI agents. Instead of playing instruments yourself, you lead the orchestra.
+
+The required skills are also shifting:
+- ~~Prompt writing~~ → **System architecture** (what components to connect and how)
+- ~~Model selection~~ → **Evaluation and observability** (how do you know the system works correctly)
+- ~~API calls~~ → **Context engineering** (what to show AI, when, and how much)
+- ~~Result review~~ → **Safety engineering** (how to respond when the system fails)
+
+---
+
+### Part 4: Harness Engineering — The Core Hypothesis of This Course
+
+#### Harness = A Deterministic Shell Around Non-Deterministic AI
+
+Geoffrey Huntley's core insight: **"Build a stronger harness, not a stronger model."**
+
+The Ralph Loop prototype is surprisingly simple:
+
+```bash
+while :; do cat PROMPT.md | <ai-coding-cli>; done
+```
+
+This one line works because of two mechanisms:
+
+- **Backpressure**: Upstream (structured specs, deterministic context) and downstream (tests, linters, type checkers) reject incorrect output. If the agent produces broken code, tests fail, and the loop automatically retries.
+- **Garbage Collection**: `git checkout .` completely removes failed attempts. The context is not contaminated by the residue of failures.
+
+OpenAI applied the same principle at scale. In a case study where Codex agents wrote 1M+ LOC without manual typing, the key was the harness, not the model: specs-as-code to enforce specifications, automatic layer architecture validation, and GC to restore a clean state on failure.
+
+<Aside type="tip" title="The Core Hypothesis of This Course">
+Given the same budget, **strengthening the harness delivers greater ROI than upgrading the model**. We test this hypothesis over 15 weeks.
+</Aside>
+
+#### 15-Week Course Roadmap — Through the Lens of the Harness
+
+| Phase | Weeks | Topic | Harness Layer |
+|-------|-------|-------|---------------|
+| **Phase 1** | 1–3 | Governance, infrastructure, protocols | **Safety layer** — brakes and airbags |
+| **Phase 2** | 4–6 | Loops, context management, instruction tuning | **Control loop** — engine and transmission |
+| **Phase 3** | 7–9 | Role assignment, planner, QA | **Orchestration** — navigation and autonomy |
+| **Phase 4** | 10–12 | Model deployment, evaluation | **Infrastructure and observability** — dashboard and maintenance |
+| **Phase 5** | 13–16 | Ralphthon capstone | **Real-world validation** — the driving test |
+
+In Phase 1 we build the safety systems first, then in Phase 2 we add the engine. Order matters — accelerating without brakes is an accident.
+
+#### What We Build in This Course
+
+After 15 weeks, you will have fully implemented the following system:
+
+<div class="diagram">
+  <div class="diagram__title">AGENTIC SDLC PIPELINE</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--purple">
+      <span class="diagram__node__label">Human (HIC)</span>
+      <span class="diagram__node__sub">Strategy setting · Week 1</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Planner Agent</span>
+      <span class="diagram__node__sub">Spec (spec.md) generation · Week 8</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">Coder Agent (Ralph Loop)</span>
+      <span class="diagram__node__sub">Code writing + automated testing · Weeks 4–6</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">QA Agent</span>
+      <span class="diagram__node__sub">Independent verification + regression testing · Week 9</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--green">
+      <span class="diagram__node__label">Deploy Agent</span>
+      <span class="diagram__node__sub">Automated deployment · Weeks 10–11</span>
+    </div>
+  </div>
+</div>
+
+---
+
+### Discussion Questions
+
+1. Have you used AI coding tools before? What tasks were they most effective for, and where did they fail?
+2. In the METR study, skilled developers became 19% slower with AI. Why? What kind of system is needed to reduce the "Babysitting Tax"?
+3. Among HITL, HOTL, and HIC, which architecture is most suitable for our course lab environment? How do we minimize student errors while maximizing learning outcomes?
+4. Why does the EU AI Act regulate AI "models" and AI "systems" separately? Is the LLM itself dangerous, or is it the system wrapping the LLM that is dangerous?
+5. "Stronger model vs stronger harness" — if you had the same budget, would you invest in a model upgrade or harness improvement?
+
+---
+
+## Practicum
+
+<Aside type="tip" title="Today's Lab Goal">
+Install AI coding CLI tools, connect to the DGX H100 server, and run your first agentic loop.
+</Aside>
+
+### Local Environment Setup
+
+<Steps>
+1. **Install Node.js 20 LTS**
+
+   ```bash
+   # macOS (Homebrew)
+   brew install node@20
+
+   # Ubuntu/Debian
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt-get install -y nodejs
+   ```
+
+2. **Install AI coding CLI tools → Set API keys → Test run**
+
+   <Tabs>
+     <TabItem label="Claude Code (Recommended)">
+       ```bash
+       # 1. Install (choose one)
+       brew install claude-code                          # Homebrew (recommended)
+       pnpm add -g @anthropic-ai/claude-code             # pnpm
+
+       # 2. Set API key (add to ~/.bashrc or ~/.zshrc)
+       export ANTHROPIC_API_KEY="sk-ant-..."
+
+       # 3. Test run
+       mkdir ~/test-project && cd ~/test-project
+       claude "Hello! Please create a simple Python hello world file in this directory."
+       ```
+     </TabItem>
+     <TabItem label="Gemini CLI">
+       ```bash
+       # 1. Install
+       pnpm add -g @google/gemini-cli
+
+       # 2. Set API key (or authenticate via browser on first run)
+       export GEMINI_API_KEY="..."
+
+       # 3. Test run
+       mkdir ~/test-project && cd ~/test-project
+       gemini
+       # In interactive mode: "Please create a simple Python hello world file in this directory."
+       ```
+     </TabItem>
+     <TabItem label="Codex CLI">
+       ```bash
+       # 1. Install
+       pnpm add -g @openai/codex
+
+       # 2. Set API key
+       export OPENAI_API_KEY="sk-..."
+
+       # 3. Test run
+       mkdir ~/test-project && cd ~/test-project
+       codex "Please create a simple Python hello world file in this directory."
+       ```
+     </TabItem>
+     <TabItem label="OpenCode">
+       ```bash
+       # 1. Install
+       brew install opencode
+
+       # 2. Set API key (based on which model provider you use)
+       export OPENAI_API_KEY="sk-..."  # when using OpenAI models
+
+       # 3. Test run
+       mkdir ~/test-project && cd ~/test-project
+       opencode
+       # In TUI: "Please create a simple Python hello world file in this directory."
+       ```
+     </TabItem>
+   </Tabs>
+
+   <Aside type="note">For a detailed comparison of tools, see the [AI Coding Tool Selection Guide](/en/reference/tool-selection).</Aside>
+
+5. **Observation exercise: Record AI autonomous decisions**
+
+   Open the code the AI generated and observe the following:
+   - What did the AI **decide on its own**? (file names, function structure, variable names, comment language, etc.)
+   - Did those decisions match your intent?
+   - Does re-running the same prompt produce a different result? (verifying non-determinism)
+
+   This observation is the starting point of harness engineering — **how do we control the non-deterministic output of AI in a deterministic way?**
+</Steps>
+
+### Connecting to the DGX Server
+
+The DGX server is protected by **Cloudflare Zero Trust**. You must install the WARP client and log in before connecting.
+
+<Steps>
+1. **Install Cloudflare WARP**
+
+   Download the client for your operating system from the [Cloudflare WARP download page](https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/download/).
+
+2. **Log in to Zero Trust**
+
+   Open WARP → click the settings gear → **Preferences → Account** → **Login to Cloudflare Zero Trust** → enter the team name → log in with your school email
+
+   <Aside type="note">The team name and server address will be provided separately during class.</Aside>
+
+3. **SSH connection**
+
+   With WARP connected, open a terminal and connect.
+
+   <Tabs>
+     <TabItem label="SSH">
+       ```bash
+       ssh {USER}@{SERVER_IP} -p {PORT}
+       # Initial password is your student ID — change it on first login!
+       ```
+     </TabItem>
+     <TabItem label="JupyterHub">
+       Access `https://jupyter.chu.ac.kr` in your browser and log in with your student ID
+     </TabItem>
+     <TabItem label="VS Code Remote">
+       ```bash
+       # After installing the VS Code Remote SSH extension
+       # Ctrl+Shift+P → Remote-SSH: Connect to Host
+       # → {SERVER_IP}:{PORT}
+       ```
+       <Aside type="tip">VS Code also requires WARP to be connected.</Aside>
+     </TabItem>
+   </Tabs>
+</Steps>
+
+<Aside type="caution" title="If the connection fails">
+If the connection is refused, first check that Cloudflare WARP is in **Connected** status. For detailed infrastructure information, see the [Infrastructure Guide](/en/reference/infrastructure).
+</Aside>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 01: Development Environment Setup
+
+**Due**: 2026-03-10 23:59
+
+**Submission path**: `assignments/week-01/[student-ID]/` via PR
+
+**Requirements**:
+1. Screenshot of AI coding CLI tool installed and version output
+2. Screenshot of successful SSH connection to DGX server
+3. `hello_agent.py` — a simple Python file generated with an AI coding CLI
+4. `README.md` — document any problems encountered during setup and how you solved them
+5. **AI system analysis report (300 words)**: Judge whether the AI coding tool you used is an "AI model" or an "AI system," and analyze which of the 7 components are present
+
+**Bonus**:
+1. Compare the top 5 systems on the SWE-bench Verified leaderboard and analyze the correlation between model size and performance
+2. Propose how EU AI Act Article 14 human oversight requirements could be applied to our course environment
+
+**Grading criteria**:
+- [ ] Environment setup complete (40 points)
+- [ ] DGX connection confirmed (20 points)
+- [ ] Troubleshooting record (20 points)
+- [ ] AI system analysis report (20 points)
+
+</div>
+
+## Key Takeaways
+
+1. **AI system ≠ AI model**: The model is the engine, the system is the automobile. Tool use, memory, planning, execution environment, safety guardrails, and observability make up the system.
+2. **SWE-bench 5% → 79%**: Agent capability has grown explosively in three years. The problem is not capability — it's control.
+3. **HITL → HOTL → HIC**: From manual transmission to self-driving. The human role shifts from "approving every step" to "setting strategy."
+4. **19% slower**: AI tools speed up individual tasks, but review costs (Babysitting Tax) cancel out the gains. The harness resolves this bottleneck.
+5. **Harness engineering**: A stronger harness, not a stronger model. Backpressure and garbage collection make non-deterministic AI deterministic.
+6. **The 15-week arc**: Governance → Infrastructure → Loops → Multi-agent → MLOps → Ralphthon. This course builds a complete agentic SDLC pipeline.
+
+## Further Reading
+
+- [Anthropic: Building Effective Agents](https://www.anthropic.com/research/building-effective-agents) — Five agent design patterns
+- [EU AI Act Full Text](https://eur-lex.europa.eu/eli/reg/2024/1689/oj) — Article 3 (Definitions), Article 14 (Human Oversight)
+- [NIST AI Risk Management Framework](https://www.nist.gov/artificial-intelligence/ai-risk-management-framework) — AI system risk management
+- [Rich Sutton: The Bitter Lesson](http://www.incompleteideas.net/IncIdeas/BitterLesson.html) — The principle of leveraging computation
+- [Geoffrey Huntley: The Loop](https://ghuntley.com/loop/) — Ralph Loop methodology
+- [METR: Measuring AI Agent Capabilities](https://arxiv.org/abs/2507.09089) — Real-world measurement of AI coding productivity
+- [SWE-bench Verified Leaderboard](https://www.swebench.com/) — Agent coding benchmark
+- [OpenAI: Practices for Governing Agentic AI Systems](https://openai.com/index/practices-for-governing-agentic-ai-systems/) — Agent governance
+- [Karpathy: Software 3.0](https://karpathy.ai/) — The software paradigm in the AI era
+
+## Next Week Preview
+
+Week 2 covers the concrete implementation of HOTL governance and **EU AI Act compliance** requirements.
+In particular, we practice "Governance-as-Code" — how to enforce governance policies through code.

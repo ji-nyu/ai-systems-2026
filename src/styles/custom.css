@@ -1035,3 +1035,18 @@ body {
   .ribbon-track, .ribbon-track-reverse { animation: none; }
   .reveal, .reveal-left, .reveal-right { opacity: 1; transform: none; }
 }
+
+/* ─── Mobile header — show theme/language selects alongside search ───────── */
+
+@media (max-width: 50rem) {
+  /* Show right-group (theme + language + social) on mobile */
+  .header .right-group {
+    display: flex !important;
+    gap: 0.5rem;
+  }
+
+  /* Hide social icons on mobile to save space */
+  .header .right-group .social-icons {
+    display: none !important;
+  }
+}

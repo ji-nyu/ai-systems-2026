@@ -1,0 +1,640 @@
+---
+title: "Week 4: Loop Paradigm — Iteration Beats Complexity"
+description: Ralph Loop, RLM, autoresearch — the theory of test-time compute scaling and how simple iteration outperforms complex architectures
+week: 4
+phase: 2
+phase_title: "Harness Engineering"
+date: "2026-03-24"
+theory_topics:
+  - Test-time compute scaling theory
+  - Ralph Loop — harness engineering and cumulative learning
+  - RLM — conquering long contexts via recursive LM calls
+  - autoresearch — autonomous experiment loop
+lab_topics:
+  - Basic Ralph loop implementation with backpressure
+  - PROMPT.md + AGENTS.md cumulative learning structure
+assignment: "Lab 04: Ralph Loop Implementation"
+assignment_due: "2026-03-31"
+difficulty: intermediate
+estimated_time: "6 hours"
+---
+
+import { Aside, Steps, Tabs, TabItem, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 2</span>
+  <Badge text="Week 4" variant="note" />
+  <Badge text="Intermediate" variant="danger" />
+</div>
+
+## Theory
+
+### Today's Learning Objectives
+
+<CardGrid>
+  <Card title="Theory Perspective" icon="open-book">
+    Explain why test-time compute scaling is the theoretical foundation of the loop paradigm.
+  </Card>
+  <Card title="Ralph Perspective" icon="seti:code">
+    Understand and implement the working principles of harness, backpressure, garbage collection, and cumulative learning.
+  </Card>
+  <Card title="Extension Perspective" icon="rocket">
+    Understand that RLM (recursive reasoning) and autoresearch (autonomous experimentation) are different applications of the same loop principle.
+  </Card>
+  <Card title="Implementation Perspective" icon="laptop">
+    Implement a Ralph loop yourself and experience the failure → learning → success cycle firsthand.
+  </Card>
+</CardGrid>
+
+---
+
+### Why Loops — The Decisive Edge in 2026 AI
+
+A single loop running overnight delivers better results than a complex pipeline.
+
+The decisive edge in 2026 AI engineering is neither a bigger model nor more sophisticated prompts. It is **loop iteration**. Run the same model hundreds of times, verify the result each time, discard failures, and accumulate successes. Simple — yet this pattern consistently beats complex multi-agent architectures.
+
+The three loops covered this week are proof:
+
+- **Ralph Loop** — generate code, verify with tests, discard failures with `git checkout .`, and retry. The code-quality loop.
+- **RLM** — the model recursively calls itself to extract only the relevant information from long documents. The context-comprehension loop.
+- **autoresearch** — hand `train.py` to an agent, measure results every 5 minutes, commit if improved, reset if not. The research loop.
+
+All three loops rest on the same principle. The governance learned in Week 2 sets the safety boundaries for loops; the MIG isolation and MCP tool standardization learned in Week 3 provide the infrastructure. Today we understand and implement the loops that actually run on top of that infrastructure.
+
+---
+
+### Part 1: Test-Time Compute Scaling — Theoretical Foundation
+
+#### Boosting Performance Without Growing the Model
+
+There is a key finding validated by OpenAI o1 in 2024: **even without increasing model size, performance improves when more compute is spent at inference time.** This is test-time compute scaling.
+
+The traditional AI performance strategy was **train-time scaling** — larger models, more data, longer training runs. The jump from GPT-3 to GPT-4 is the canonical example. But this approach incurs exponentially increasing costs.
+
+Test-time compute scaling takes a different path. It makes **an already-trained model think longer and more during inference**. Specifically:
+
+- o1 explores multiple reasoning paths for the same problem and selects the best answer
+- The more tokens invested in reasoning (= the longer it thinks), the higher the accuracy
+- Up to a point, increasing inference compute is more **cost-effective** than scaling model size
+
+#### How the Three Loops Leverage Test-Time Compute
+
+Ralph, RLM, and autoresearch are all concrete realizations of test-time compute scaling:
+
+| Loop | Application Domain | How Test-Time Compute Is Used |
+|------|--------------------|-------------------------------|
+| **Ralph Loop** | Code generation | Generate code → run tests → retry on failure. 10 attempts = 10× the inference tokens |
+| **RLM** | Long-context understanding | Model recursively calls itself. Inference compute grows with recursion depth |
+| **autoresearch** | ML experimentation | 5-minute budget × N iterations. Compute invested scales with iteration count |
+
+See the pattern? All three **call the same model repeatedly** while filtering results through **deterministic verification conditions**. Rather than changing the model itself, they increase the time and number of times the model thinks to ensure quality.
+
+<Aside type="note" title="Your 8 Hours of Sleep = 100 Improvements for Someone Else">
+The core insight of test-time compute: you don't need to wait for a better model. Run a loop with the model you have now. Start a loop at 10 PM, check results at 6 AM — in those 8 hours, the agent will have made dozens to hundreds of attempts. Test-time compute accumulates with every attempt.
+</Aside>
+
+---
+
+### Part 2: Ralph Loop Deep Dive
+
+The **Ralph Loop** (Ralph Wiggum Loop), popularized by developer Geoffrey Huntley in late 2025, is the core paradigm of agentic software development.
+
+#### The Archetype: One Line of Bash
+
+```bash
+# The essence of the Ralph loop — a single line
+while :; do cat PROMPT.md | claude-code; done
+# The same pattern works with other AI coding CLI tools:
+# while :; do cat PROMPT.md | gemini; done
+# while :; do codex --approval-mode full-auto "$(cat PROMPT.md)"; done
+```
+
+Two design decisions run through this infinite loop:
+
+1. **A Stop Hook blocks exits** — even if the agent tries to terminate itself, the shell restarts it. The agent believes it has "finished," but the next loop re-reads PROMPT.md and finds incomplete tasks.
+2. **A fresh context window opens every iteration** — failed attempts from previous loops do not contaminate the context. Git history and the filesystem are the only state stores.
+
+This simplicity is the point. No inter-agent communication, no state DB, no orchestrator. **The intelligence of the loop lies not in the loop itself but in the environmental constraints** — this is the harness.
+
+#### The Advantage of Monolithic Architecture
+
+The Ralph loop is intentionally **monolithic**:
+
+<CardGrid>
+  <Card title="Microservices (Complex)" icon="close">
+    - Communication errors between agents
+    - Non-deterministic architectural failures
+    - Undebuggable cascading failures
+  </Card>
+  <Card title="Ralph Loop (Simple)" icon="approve-check-circle">
+    - Single process, single repository
+    - Exactly 1 task per loop
+    - Predictable execution state
+  </Card>
+</CardGrid>
+
+#### Harness Architecture
+
+<div class="harness-diagram">
+  <div class="harness-title">RALPH HARNESS</div>
+  <div class="harness-flow">
+    <div class="harness-node harness-node--input">
+      <span class="harness-node__icon">&#128196;</span>
+      <span class="harness-node__label">PROMPT.md</span>
+    </div>
+    <div class="harness-arrow">&#x2193;</div>
+    <div class="harness-node harness-node--agent">
+      <span class="harness-node__icon">&#129302;</span>
+      <span class="harness-node__label">AI Agent</span>
+      <span class="harness-node__sub">Code generation attempt</span>
+    </div>
+    <div class="harness-arrow">&#x2193;</div>
+    <div class="harness-node harness-node--backpressure">
+      <span class="harness-node__title">Backpressure System</span>
+      <ul class="harness-checks">
+        <li>Run compiler</li>
+        <li>Run type checker</li>
+        <li>Run test suite</li>
+      </ul>
+    </div>
+    <div class="harness-branch">
+      <div class="harness-branch__success">
+        <span class="harness-branch__icon">&#10003;</span>
+        <span>Success</span>
+        <span class="harness-branch__desc">Record in AGENTS.md + next task</span>
+      </div>
+      <div class="harness-branch__fail">
+        <span class="harness-branch__icon">&#10007;</span>
+        <span>Failure</span>
+        <span class="harness-branch__desc">GC + record failure in AGENTS.md + retry</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+The three pillars of the harness:
+
+1. **Backpressure** — the compiler, type checker, and test suite automatically reject agent output. No matter how confidently the agent writes code, if `pytest` fails, that code is as good as nonexistent.
+2. **Garbage Collection** — `git checkout .` completely removes failed code. The repository always returns to the last successful state. Not like a Jenga tower where a wrong block topples everything, but like a potter's wheel where you rework the clay if the shape isn't right.
+3. **State Tracking** — the checklist in PROMPT.md and git history record progress. The agent in the next loop can assess where the previous loop left off.
+
+#### Huntley's Jenga vs. Pottery Analogy
+
+- **Traditional software**: stacking Jenga blocks — one wrong block and everything collapses
+- **Ralph loop**: clay on the potter's wheel — if the shape isn't right, rework it; repeat indefinitely
+
+#### Cumulative Learning Structure — AGENTS.md
+
+The evolved form of the Ralph loop goes beyond simple repetition to a **loop that learns**. The key is the `AGENTS.md` file.
+
+```markdown
+# AGENTS.md — Cumulative Learning Record
+
+## Learned Patterns
+- The division function in calculator.py requires ZeroDivisionError handling (failed in loop 3)
+- pytest fixtures must be placed in conftest.py to prevent import errors (failed in loop 5)
+
+## Forbidden Patterns
+- Do not use `eval()` — security risk + bypasses type checker
+- Do not share state via global variables — breaks test isolation
+
+## Current Status
+- [x] add() implementation complete
+- [x] subtract() implementation complete
+- [ ] multiply() in progress
+```
+
+At the end of each loop the agent records **what it learned in this loop** in AGENTS.md. The next loop's agent reads this file before starting, so it does not repeat the same mistakes.
+
+This is fundamentally different from fine-tuning:
+- **Fine-tuning**: modifies model weights. Expensive, slow, and hard to reverse.
+- **AGENTS.md**: written to a text file. Reflected immediately, tracked with git, readable by anyone.
+
+"Failure itself is information" — an agent's failed attempt is "deterministically bad," and this information becomes the input for the next loop. If the same task fails 10 or more times in a row, it is judged stuck, and the task is split into smaller units before retrying.
+
+#### Claude Code `/loop` — Official Automation Loop
+
+The `/loop` command officially shipped in Claude Code by Anthropic in 2026 implements the Ralph loop philosophy at the product level. Instead of a manual `while` shell script, a single line spins up a **schedule-based autonomous agent**.
+
+```bash
+# Basic syntax
+claude /loop "<instruction>" --every <interval> --for <duration>
+
+# Example: find and fix failing tests every 2 hours, for up to 3 days
+claude /loop "check for failing tests and fix them" --every 2h --for 3d
+```
+
+<Aside type="tip" title="This Is Not a Cron Job">
+`/loop` is not a simple scheduler. Each iteration creates a **git worktree** (an isolated copy of the repository) and re-reads `CLAUDE.md` to incorporate the latest context. Each execute → wait → re-execute cycle is an independent agent session.
+</Aside>
+
+**Core design principles**:
+
+| Element | Description |
+|---------|-------------|
+| **Worktree isolation** | Every iteration runs via `git worktree` without affecting the main branch |
+| **CLAUDE.md = control plane** | CLAUDE.md is read every cycle, so modifying the instruction file changes the behavior of a running loop |
+| **3-day expiry** | Maximum `--for 3d`. Intentional design to prevent **context drift** in forgotten autonomous agents |
+| **3 flags** | `"instruction"`, `--every`, `--for` — this is the entire API surface |
+
+**Why the 3-day expiry is a feature**: if a loop set on Tuesday runs through Friday, by then 15 PRs merged by the team will conflict with it. An agent confidently patching with stale context creates problems harder to debug than the original bug. Re-evaluating and restarting every 72 hours is the safe approach.
+
+**Three validated workflows**:
+
+<Tabs>
+  <TabItem label="PR Monitoring">
+    ```bash
+    claude /loop "check open PRs on the current branch. If CI is failing,
+    read the error logs, fix the issue, and push. If CI passes and the PR
+    has no requested changes, post a comment saying 'Ready for human review.'
+    Summarize what you did in the PR description." --every 30m --for 2d
+    ```
+    CI pipeline monitoring, automatic lint/type error fixes, notification when ready. Cannot handle failures requiring business logic judgment.
+  </TabItem>
+  <TabItem label="Dependency Monitoring">
+    ```bash
+    claude /loop "run pnpm audit. If any high or critical vulnerabilities exist,
+    create a branch, update the affected packages, run the test suite, and
+    open a PR if tests pass. Include the vulnerability details in the PR body."
+    --every 4h --for 3d
+    ```
+    Clear success criteria (tests pass) and minimal business context — an ideal task for `/loop`.
+  </TabItem>
+  <TabItem label="Daily Standup">
+    ```bash
+    claude /loop "summarize all commits merged to main in the last 24 hours.
+    Include: PR titles, authors, files changed count, and any test coverage
+    changes. Write the summary as a Markdown standup update and save it to
+    ./reports/standup-$(date +%Y-%m-%d).md" --every 24h --for 3d
+    ```
+    Automates a manual process. File output provides basic functionality even without Slack MCP integration.
+  </TabItem>
+</Tabs>
+
+**When `/loop` fails**:
+- **Ambiguous tasks**: "refactor this module to be more maintainable" — interprets "maintainable" differently each iteration
+- **Context drift**: divergence between the worktree branch point and the current main in a fast-moving codebase
+- **Cost**: 30-minute interval × 3 days = 144 iterations. If each iteration processes substantial context, API costs accumulate
+
+<Aside type="caution" title="Ralph Loop vs /loop">
+The Ralph loop (`while :; do ... done`) is a **general-purpose pattern** — applicable to any AI coding CLI, with direct control over harness logic. `/loop` is a **Claude Code-specific official feature** that handles worktree isolation and scheduling automatically but is tied to Claude Code. The two are **complementary, not interchangeable**.
+</Aside>
+
+---
+
+### Part 3: RLM — Recursive LM Calls
+
+#### The Problem: LLMs Miss the Middle of Long Documents
+
+Even with a 200K-token context window, when a long document is passed to an LLM, **understanding of the middle sections degrades compared to the beginning and end** (the "Lost in the Middle" phenomenon). The existing solutions were two:
+
+1. **RAG (Retrieval-Augmented Generation)**: chunk the document and retrieve only relevant pieces via search. But you need to know in advance which chunks are relevant — information loss is inevitable.
+2. **Summarization**: summarize the long document before passing it in. But detail is lost in summarization.
+
+#### RLM's Solution: The Model Recursively Calls Itself
+
+RLM (Recursive Language Model) takes a fundamentally different approach. It **loads the long prompt into Python REPL variables**, then has the model write code to extract only the needed portions and **recursively call itself**.
+
+The core idea: instead of enlarging the context window, **let the model decide for itself how to read the context**.
+
+```python
+# RLM pseudocode — recursive call pattern
+def rlm_solve(question: str, documents: list[str]) -> str:
+    """The model recursively calls itself to process long documents."""
+
+    # Step 1: load all documents into Python variables
+    context_vars = {f"doc_{i}": doc for i, doc in enumerate(documents)}
+
+    # Step 2: ask the model to write code that decides "which parts to read"
+    planning_code = llm_call(
+        f"Write Python code to determine which parts of {len(documents)} documents "
+        f"need to be read to answer the following question.\n"
+        f"Question: {question}"
+    )
+
+    # Step 3: execute the code → extract only relevant parts
+    relevant_parts = execute(planning_code, context_vars)
+
+    # Step 4: recursively call itself with the extracted parts
+    if fits_in_context(relevant_parts):
+        return llm_call(f"Question: {question}\nContext: {relevant_parts}")
+    else:
+        # Still too large — recurse again
+        return rlm_solve(question, split(relevant_parts))
+```
+
+#### RLM Results and Significance
+
+The 2025 results from Zhang et al. are striking: **GPT-5-mini + RLM achieved more than 2× the performance of GPT-5 alone on the OOLONG benchmark**. A smaller model outperformed a larger model purely through recursive calls.
+
+Why this is possible:
+- **No information loss**: unlike RAG, the full original document is in a variable. The model can access it at any time.
+- **Traceable**: the recursion trajectory is left as code. You can trace why the model read a particular section and what logic led it to the answer.
+- **The model decides the context exploration strategy**: not a summarization or search algorithm, but the model itself expressing in code "which part of the document should I read to answer this question?"
+
+#### Connection to the Ralph Loop
+
+The Ralph Loop and RLM are different applications of the same principle:
+
+| Comparison | Ralph Loop | RLM |
+|------------|-----------|-----|
+| **Iteration target** | Code generation | Context exploration |
+| **Call pattern** | Repeated calls from a shell loop | Model recursively calls itself |
+| **Verification condition** | Test pass/fail | Answer completeness |
+| **State storage** | git + filesystem | Python REPL variables |
+| **Common thread** | Both call the same model repeatedly to convert test-time compute into reasoning quality |
+
+<Aside type="tip" title="Connection to Week 5">
+We won't implement RLM directly in class, but understanding the principle is useful for addressing Context Rot in Week 5. Ralph's "fresh context window every loop" and RLM's "recursive context exploration" solve the context window problem from **opposite directions** — Ralph discards; RLM explores.
+</Aside>
+
+---
+
+### Part 4: autoresearch — Autonomous Experiment Loop
+
+#### Karpathy's autoresearch
+
+**autoresearch**, published by Andrej Karpathy, applies the loop paradigm to ML research. The idea is strikingly simple:
+
+1. Give the agent a single `train.py`
+2. The agent modifies the code freely
+3. After a **fixed 5-minute time budget**, measure `val_bpb` (validation bits per byte)
+4. If improved, **commit**; if not, **reset**
+5. Run overnight — by morning, an improvement history has accumulated in git log
+
+Write only a research direction in `program.md`, and the agent autonomously designs and executes specific experiments.
+
+#### Core Design Principles
+
+| Principle | Description | Why It Matters |
+|-----------|-------------|----------------|
+| **Fixed time budget** | Each experiment capped at 5 minutes | Fair comparison. If one experiment takes 40 minutes, three others can't run |
+| **git branch-based** | Success = commit, failure = reset | Failed experiment artifacts don't contaminate the next experiment |
+| **Single metric** | Only `val_bpb` is measured | Removes ambiguity. Answers "did it improve?" with a number |
+| **program.md** | Research direction text file | Same role as PROMPT.md. Humans define strategy; agents execute tactics |
+
+#### Distributed Research Vision: The SETI@home Pattern
+
+Karpathy envisions the future of autoresearch as **distributed research**. Just as SETI@home distributed the search for extraterrestrial signals, hundreds of agents each run different experiments in parallel, and only improved results are merged to a central repository. An improvement discovered by one agent becomes the starting point for another agent's next experiment.
+
+#### Connection to the Ralph Loop
+
+autoresearch and the Ralph Loop follow the **same pattern**:
+
+| Comparison | Ralph Loop | autoresearch |
+|------------|-----------|-------------|
+| **Target** | Software code | ML training code |
+| **Verification condition** | Tests pass | val_bpb improvement |
+| **State management** | `git checkout .` | `git reset` |
+| **Instruction file** | PROMPT.md | program.md |
+| **Essence** | Deterministic verification + loop = quality | Deterministic metric + loop = performance |
+
+The only difference is the verification condition. Ralph asks "does the code pass tests?"; autoresearch asks "does val_bpb improve?" The rest of the architecture — loop, git-based state management, text-file instructions — is identical.
+
+<Aside type="caution" title="Running autoresearch on the DGX">
+When running autoresearch patterns on our DGX, using the MIG slices learned in Week 3 is essential. Running small-scale model experiments repeatedly on a single `1g.10gb` slice lets you run autonomous experiments overnight without impacting other students' work.
+</Aside>
+
+---
+
+### Part 5: Integrating the Three Loops — A Common Architecture
+
+#### Comparison Table
+
+| Item | Ralph Loop | RLM | autoresearch |
+|------|-----------|-----|-------------|
+| **Application domain** | Software development | Long-context understanding | ML experimentation |
+| **Verification condition** | Compile + test pass | Answer completeness | val_bpb value |
+| **State storage** | git + filesystem | Python REPL variables | git branch |
+| **Context strategy** | New context each loop (wiping) | Recursive context exploration | New context each experiment |
+| **Failure handling** | `git checkout .` | Recursive splitting | `git reset` |
+| **Human role** | Write PROMPT.md | Pose the question | Write program.md |
+
+#### The Three Common Elements
+
+The three essential elements shared by all three loops:
+
+1. **The important thought** — PROMPT.md, the question, program.md. Humans define the "what."
+2. **A loop with clear verification conditions** — tests, answer completeness, val_bpb. Success/failure is determined deterministically.
+3. **Sufficient token budget** — the more loops run, the more test-time compute accumulates. The cost is time and tokens.
+
+When these three elements are in place, the loop paradigm can be applied to any domain.
+
+#### Connections to Other Weeks
+
+- **Week 2 governance**: the moment a loop leaves a side effect in the outside world is the **Hard Interrupt** point. When a Ralph loop creates a PR, or autoresearch saves a model checkpoint to shared storage, the CUD policy from Week 2 activates.
+- **Week 3 MIG/MCP**: MIG isolates the loop's compute. If one student's loop causes an OOM, it doesn't affect other students. MCP standardizes tool access within the loop.
+- **Week 5 Context Rot**: Ralph's context wiping (fresh context every loop) is the first strategy in the Context Rot solution. Week 5 covers this systematically.
+
+---
+
+### In-Class Discussion Questions
+
+1. Ralph's "fresh context every loop" and RLM's "recursive calls" solve the context window problem in **opposite directions**. Can these two be combined? What form would it take?
+2. Why is autoresearch's **5-minute fixed budget** important? What problems arise if you run it "until improvement" with no budget?
+3. What is the difference between **recording learnings in AGENTS.md** in the Ralph loop and **fine-tuning the model**? What are the advantages and disadvantages of each?
+4. If you ran 100 loops during your 8 hours of sleep, **what task would you apply it to**? What would you set as the verification condition?
+5. What are the **limits** of the loop paradigm? What problems can't be solved by iteration?
+
+---
+
+## Practicum
+
+### Implementing the Ralph Loop with Cumulative Learning
+
+<Aside type="tip" title="Today's Practicum Goal">
+Build a Ralph harness that includes PROMPT.md and AGENTS.md, run at least 3 loops, and experience the failure → learning → success cycle firsthand.
+</Aside>
+
+<Steps>
+1. **Set up the project structure**
+
+   ```bash
+   mkdir ralph-project && cd ralph-project
+   git init
+   touch PROMPT.md AGENTS.md
+   mkdir tests
+   ```
+
+2. **Write PROMPT.md**
+
+   ```markdown
+   # Current Task
+   Implement the following items in order:
+   - [ ] Implement add(a, b) function in calculator.py
+   - [ ] Implement subtract(a, b) function in calculator.py
+   - [ ] Implement divide(a, b) function in calculator.py (handle ZeroDivisionError)
+
+   # Constraints
+   - Implement only one function at a time
+   - Include type hints in all functions
+   - Do not write code without tests
+   - Write tests in tests/test_calculator.py before implementing
+
+   # State Tracking
+   - Always read AGENTS.md before starting
+   - On failure: record the cause in AGENTS.md, then exit
+   - On success: record the success pattern in AGENTS.md, then proceed to the next task
+   ```
+
+3. **Write harness.sh — backpressure + garbage collection**
+
+   ```bash
+   #!/bin/bash
+   # harness.sh — Ralph loop harness
+
+   set -e
+   MAX_RETRIES=10
+   RETRY_COUNT=0
+
+   while true; do
+     echo "=== Ralph Loop #$((RETRY_COUNT + 1)) ==="
+
+     # Run the agent
+     cat PROMPT.md | claude-code
+
+     # Backpressure: type check + test run
+     if python -m py_compile calculator.py 2>/dev/null && \
+        python -m pytest tests/ -q 2>/dev/null; then
+       echo "Tests passed — committing and moving on"
+       git add -A && git commit -m "loop $((RETRY_COUNT + 1)): task completed"
+       RETRY_COUNT=0
+     else
+       echo "Tests failed — garbage collection + retry"
+       RETRY_COUNT=$((RETRY_COUNT + 1))
+
+       # Stuck detection
+       if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+         echo "STUCK: $MAX_RETRIES consecutive failures. Splitting task."
+         echo "- STUCK at loop $RETRY_COUNT: $(date)" >> AGENTS.md
+         git add AGENTS.md && git commit -m "stuck: recorded failure pattern"
+         RETRY_COUNT=0
+       fi
+
+       # Garbage Collection — remove failed code
+       git checkout -- calculator.py tests/ 2>/dev/null || true
+       sleep 2
+     fi
+   done
+   ```
+
+4. **Initialize the AGENTS.md cumulative learning structure**
+
+   ```markdown
+   # AGENTS.md — Cumulative Learning Record
+
+   ## Learned Patterns
+   (filled automatically after loop runs)
+
+   ## Forbidden Patterns
+   (anti-patterns learned from repeated failures)
+
+   ## Progress Status
+   - [ ] add() implementation
+   - [ ] subtract() implementation
+   - [ ] divide() implementation
+   ```
+
+5. **Run and observe — minimum 3 loops**
+
+   ```bash
+   chmod +x harness.sh
+   ./harness.sh
+   ```
+
+   Observation points:
+   - Does the agent read AGENTS.md before starting?
+   - Is learning recorded in AGENTS.md after a failure?
+   - Does the next loop avoid repeating the same mistake?
+   - Does `git log --oneline` show only successful commits (no failed code committed)?
+
+6. **Mini autoresearch pattern experiment (optional)**
+
+   An autoresearch pattern to optimize the execution time of a simple Python function:
+
+   ```bash
+   # mini_autoresearch.sh
+   #!/bin/bash
+   BEST_TIME=999
+
+   while true; do
+     # Agent modifies optimize.py
+     cat program.md | claude-code
+
+     # Run benchmark with 5-minute time limit
+     CURRENT_TIME=$(timeout 300 python benchmark.py 2>/dev/null || echo 999)
+
+     if (( $(echo "$CURRENT_TIME < $BEST_TIME" | bc -l) )); then
+       echo "Improved: $BEST_TIME -> $CURRENT_TIME"
+       BEST_TIME=$CURRENT_TIME
+       git add -A && git commit -m "improved: time=$CURRENT_TIME"
+     else
+       echo "No improvement ($CURRENT_TIME >= $BEST_TIME) — reset"
+       git checkout .
+     fi
+   done
+   ```
+</Steps>
+
+### Practicum Checklist
+
+- Does PROMPT.md specify 3 or more tasks?
+- Does AGENTS.md contain at least 2 learning records?
+- Does harness.sh implement both backpressure (test runs) and garbage collection (`git checkout .`)?
+- Does `git log` show only successful commits? (No failed code committed?)
+- Is the failure → learning → retry → success process visible in the terminal log?
+- Does stuck detection logic exist? (optional)
+
+---
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 04: Ralph Loop Implementation
+
+**Submission deadline**: 2026-03-31 23:59
+
+**Submission path**: `assignments/week-04/[student ID]/`
+
+**Required deliverables** (5 items):
+1. `harness.sh` — Ralph harness with backpressure + garbage collection
+2. `PROMPT.md` — specification of at least 3 tasks
+3. `AGENTS.md` — cumulative learning record after loop runs (must show failure-after-failure-then-success across at least 2 failures)
+4. Loop execution log — terminal log showing the failure → learning → retry process (`loop_log.txt`)
+5. `README.md` — harness design decisions + explanation of the connection to test-time compute scaling
+
+**Bonus items** (5 items):
+1. Mini autoresearch pattern implementation — Python function optimization with fixed time budget
+2. Stuck detection logic — on N consecutive failures, split the task into smaller units and retry
+3. Loop metric collection — record per-iteration token usage, success rate, and elapsed time as CSV/JSON
+4. Analysis report on worktree isolation behavior after running Claude Code `/loop`
+5. Long-document analysis experiment using RLM principles — include results and reflection in README
+
+**Evaluation criteria**:
+- Garbage collection mechanism operates correctly
+- Evidence that AGENTS.md cumulative learning is actually reflected in subsequent loops
+- Error log packaging and state tracking file utilization
+
+</div>
+
+## Key Takeaways
+
+1. **Test-time compute scaling**: performance improves by investing more compute at inference time without growing the model. All three loops are implementations of this principle.
+2. **Ralph Loop = harness + loop**: the harness (backpressure + garbage collection) controls non-deterministic agents deterministically. AGENTS.md enables cumulative learning.
+3. **RLM = recursive context exploration**: the model recursively calls itself to process long documents. It explores context without information loss, and the recursion trajectory is preserved as code.
+4. **autoresearch = autonomous experiment loop**: fixed time budget + single metric + git-based state management. Same pattern as Ralph, differing only in the verification condition.
+5. **Three common elements**: the important thought (instruction file) + clear verification conditions (loop) + sufficient token budget. Once these are in place, the loop paradigm can be applied to any domain.
+6. **Infrastructure connections**: Week 2 governance sets safety boundaries for loops, Week 3 MIG provides compute isolation and MCP standardizes tools. Ralph's context wiping is the starting point for the Context Rot solution in Week 5.
+
+## Further Reading
+
+- [Ralph Loop Repository](https://github.com/geoffreyhuntley/ralph) — Huntley's official Ralph loop repository
+- [Ralph Loop Playbook](https://ghuntley.com/ralph/) — detailed Ralph loop methodology guide
+- [RLM Repository](https://github.com/azhang2000/rlm) — official Recursive Language Model implementation
+- [RLM Blog Post](https://azhang2000.github.io/rlm/) — RLM paper explanation and benchmark results
+- [autoresearch Repository](https://github.com/karpathy/autoresearch) — Karpathy's autonomous ML research loop
+- [OpenAI: Learning to Reason with LLMs](https://openai.com/index/learning-to-reason-with-llms/) — o1 and test-time compute scaling
+- [Anthropic: Claude Code /loop Documentation](https://docs.anthropic.com/en/docs/claude-code/loop) — Claude Code official loop documentation
+- [Snell et al. (2024): Scaling LLM Test-Time Compute](https://arxiv.org/abs/2408.03314) — test-time compute scaling theory paper
