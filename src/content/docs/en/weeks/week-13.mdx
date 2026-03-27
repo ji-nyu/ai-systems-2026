@@ -1,0 +1,91 @@
+---
+title: "Week 13: Capstone Project Design"
+description: Preparing for Ralphthon — team formation, topic selection, and system architecture design
+week: 13
+phase: 5
+phase_title: Capstone Ralphthon
+date: "2026-05-26"
+theory_topics:
+  - Ralphthon overview and evaluation criteria
+  - System architecture design methodology
+  - Team collaboration protocols
+lab_topics:
+  - Team formation and role assignment
+  - Writing the architecture design document
+assignment: "Capstone: Architecture Design Document"
+assignment_due: "2026-06-02"
+difficulty: advanced
+estimated_time: "10 hours"
+---
+
+import { Aside, Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 5</span>
+  <Badge text="Week 13" variant="note" />
+  <Badge text="Advanced" variant="danger" />
+</div>
+
+## What is Ralphthon?
+
+**Ralphthon** is the capstone project for this course. Working in teams, you will design and implement an **autonomous agentic system that solves a real software problem**, based on the Ralph Loop methodology.
+
+The name is borrowed from the industry term "Hackathon." As the Ralph Loop methodology spread in early 2026, **Ralphthon** culture emerged — and this is your chance to experience it firsthand.
+
+## Team Formation
+
+<CardGrid>
+  <Card title="Team Size" icon="group">
+    Teams of 3–4. Roles: 1 Architect, 2 Engineers, 1 QA/DevOps
+  </Card>
+  <Card title="Topic Selection" icon="document">
+    A software project that solves a real problem. Requires instructor approval.
+  </Card>
+</CardGrid>
+
+## Recommended Project Ideas
+
+1. **Autonomous Code Review System** — Automatically reviews GitHub PRs and suggests improvements
+2. **Automatic Test Generator** — Generates pytest tests automatically from an existing codebase
+3. **Documentation Automation** — Automatically updates README and API docs when code changes
+4. **Automatic Bug Fixer** — Reads GitHub Issues and automatically finds and fixes bugs
+5. **Performance Optimization Agent** — Analyzes profiling results and automatically fixes performance bottlenecks
+
+## Architecture Design Checklist
+
+<Steps>
+1. **Problem Definition** — Clearly define the real problem to solve and the criteria for success
+
+2. **Agent Role Design** — How many agents? What are each agent's roles and responsibilities?
+
+3. **Data Flow Design** — Define the artifact formats passed between agents
+
+4. **Harness Design** — Backpressure mechanisms, garbage collection policies
+
+5. **Infrastructure Design** — Which MIG slices? Which models?
+
+6. **Evaluation Method** — How will the system's performance be measured?
+</Steps>
+
+<Aside type="note" title="Design Document Requirements">
+The architecture design document submitted as the Week 13 assignment must include an agent interaction diagram, a data flow diagram, and a rationale for technology stack choices.
+</Aside>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Capstone: Architecture Design Document
+
+**Submission deadline**: 2026-06-02 23:59
+
+**Submission path**: `capstone/teams/[team-name]/design.md`
+
+**Requirements**:
+1. Problem definition and solution approach
+2. Agent architecture diagram
+3. Technology stack selection and rationale
+4. Week-by-week implementation plan
+5. Definition of success metrics
+
+</div>

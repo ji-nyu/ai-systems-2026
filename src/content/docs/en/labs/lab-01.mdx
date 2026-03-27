@@ -1,0 +1,200 @@
+---
+title: "Lab 01: Development Environment Setup"
+description: Install AI coding CLI tools, connect to the DGX server, and complete GitHub configuration
+week: 1
+difficulty: beginner
+estimated_time: "3 hours"
+assignment_due: "2026-03-10"
+---
+
+import { Steps, Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Beginner" variant="success" /> <Badge text="Due: 2026-03-10" variant="note" />
+
+## Objectives
+
+- Install AI coding CLI tools and configure API keys
+- Successfully connect to the DGX H100 server via SSH
+- Understand the GitHub repository fork and PR workflow
+
+## Prerequisites
+
+- GitHub account
+- Terminal (macOS/Linux) or WSL (Windows) available
+
+## Lab Steps
+
+<Steps>
+1. **Verify Node.js Installation**
+
+   ```bash
+   node --version  # v20.x.x or higher
+   pnpm --version  # 10.x.x or higher
+   ```
+
+   If Node.js is not installed, get it from [nodejs.org](https://nodejs.org).
+
+2. **Install AI Coding CLI Tools**
+
+   <Tabs>
+     <TabItem label="Claude Code (Recommended)">
+       ```bash
+       pnpm add -g @anthropic-ai/claude-code
+       claude --version
+       ```
+     </TabItem>
+     <TabItem label="Gemini CLI">
+       ```bash
+       pnpm add -g @google/gemini-cli
+       gemini --version
+       ```
+     </TabItem>
+     <TabItem label="Codex CLI">
+       ```bash
+       pnpm add -g @openai/codex
+       codex --version
+       ```
+     </TabItem>
+     <TabItem label="OpenCode">
+       ```bash
+       brew install opencode
+       ```
+     </TabItem>
+   </Tabs>
+
+   <Aside type="note">For a detailed comparison of tools, see the [AI Coding Tool Selection Guide](/en/reference/tool-selection).</Aside>
+
+3. **Configure API Keys**
+
+   <Tabs>
+     <TabItem label="Claude Code">
+       Obtain an API key from [console.anthropic.com](https://console.anthropic.com), then:
+       ```bash
+       # Add to ~/.bashrc or ~/.zshrc
+       export ANTHROPIC_API_KEY="sk-ant-..."
+       source ~/.bashrc
+       ```
+     </TabItem>
+     <TabItem label="Gemini CLI">
+       Obtain an API key from [aistudio.google.com](https://aistudio.google.com), then:
+       ```bash
+       export GEMINI_API_KEY="..."
+       # Or authenticate via browser OAuth on first run
+       ```
+     </TabItem>
+     <TabItem label="Codex CLI">
+       Obtain an API key from [platform.openai.com](https://platform.openai.com), then:
+       ```bash
+       export OPENAI_API_KEY="sk-..."
+       ```
+     </TabItem>
+     <TabItem label="OpenCode">
+       ```bash
+       # Configure based on your chosen model provider
+       export OPENAI_API_KEY="sk-..."  # When using OpenAI models
+       ```
+     </TabItem>
+   </Tabs>
+
+4. **First Run Test**
+
+   <Tabs>
+     <TabItem label="Claude Code">
+       ```bash
+       mkdir ~/hello-agent && cd ~/hello-agent
+       claude "Create a Python file that prints 'Hello, AI Engineering 2026!'"
+       python hello.py
+       ```
+     </TabItem>
+     <TabItem label="Gemini CLI">
+       ```bash
+       mkdir ~/hello-agent && cd ~/hello-agent
+       gemini
+       # In interactive mode: "Create a Python file that prints 'Hello, AI Engineering 2026!'"
+       ```
+     </TabItem>
+     <TabItem label="Codex CLI">
+       ```bash
+       mkdir ~/hello-agent && cd ~/hello-agent
+       codex "Create a Python file that prints 'Hello, AI Engineering 2026!'"
+       python hello.py
+       ```
+     </TabItem>
+     <TabItem label="OpenCode">
+       ```bash
+       mkdir ~/hello-agent && cd ~/hello-agent
+       opencode
+       # In TUI: "Create a Python file that prints 'Hello, AI Engineering 2026!'"
+       ```
+     </TabItem>
+   </Tabs>
+
+5. **Observation Task: Record AI's Autonomous Decisions**
+
+   Open the code the AI generated and observe the following:
+   - What did the AI **decide on its own**? (filename, function structure, variable names, comment language, etc.)
+   - Distinguish between what you **explicitly instructed** and what the AI **decided autonomously**, and record both.
+   - How does this observation connect to the Week 1 concept of "AI Model vs. AI System"?
+
+   ```markdown
+   # Observation Log (write in observations.md)
+   ## What I instructed
+   - "A file that prints 'Hello, AI Engineering 2026!'"
+
+   ## What the AI decided autonomously
+   - Filename: ???
+   - Variable/function names: ???
+   - Code structure: ???
+   - Comment language: ???
+   - Other: ???
+   ```
+
+6. **Connect to the DGX Server**
+
+   <Tabs>
+     <TabItem label="SSH">
+       ```bash
+       ssh [student-id]@dgx.chu.ac.kr
+       # Initial password: student ID
+       passwd  # Change immediately!
+       ```
+     </TabItem>
+     <TabItem label="SSH Config">
+       ```
+       # ~/.ssh/config
+       Host dgx
+         HostName dgx.chu.ac.kr
+         User [student-id]
+         IdentityFile ~/.ssh/id_ed25519
+       ```
+     </TabItem>
+   </Tabs>
+
+7. **Fork and Clone the Repository**
+
+   ```bash
+   # After forking on GitHub
+   git clone https://github.com/[YOUR_USERNAME]/ai-systems-2026.git
+   cd ai-systems-2026
+   pnpm install
+   pnpm run dev  # Check the local site
+   ```
+</Steps>
+
+## Deliverables
+
+Submit a PR with the following files in `assignments/lab-01/[student-id]/`:
+
+- [ ] `README.md` — Installation process and troubleshooting notes + AI system analysis report (300 characters minimum)
+- [ ] `hello.py` — Python file generated by an AI coding CLI
+- [ ] `observations.md` — Record of AI's autonomous decisions
+- [ ] `screenshots/` — Screenshots of completed installation and DGX connection (2 or more)
+
+**Bonus Points**:
+1. Compare the top 5 systems on the SWE-bench Verified leaderboard and analyze the correlation between model size and performance.
+2. Propose how EU AI Act Article 14's human oversight requirements can be applied to our course environment.
+
+<Aside type="tip" title="Troubleshooting">
+- API key error: Verify the environment variable is set correctly with `echo $ANTHROPIC_API_KEY`
+- DGX connection failure: VPN connection required when accessing from outside campus
+</Aside>

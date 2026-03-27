@@ -1,0 +1,103 @@
+---
+/**
+ * Custom language toggle — compact pill-style "KO | EN" switcher.
+ * Replaces Starlight's default <Select>-based LanguageSelect.
+ */
+import config from 'virtual:starlight/user-config';
+
+const currentLocale = Astro.locals.starlightRoute.locale;
+const pathname = Astro.url.pathname;
+
+function getLocalizedPath(code: string): string {
+  // root locale = Korean (no prefix)
+  if (code === 'root') {
+    // Strip /en/ prefix if present
+    return pathname.replace(/^\/en(\/|$)/, '/') || '/';
+  }
+  // Non-root locale: add prefix
+  if (pathname.startsWith(`/${code}/`) || pathname === `/${code}`) {
+    return pathname;
+  }
+  return `/${code}${pathname}`;
+}
+
+const localeEntries = Object.entries(config.locales);
+---
+
+{
+  config.isMultilingual && (
+    <nav class="lang-switcher" aria-label={Astro.locals.t('languageSelect.accessibleLabel')}>
+      {localeEntries.map(([code, locale], i) => {
+        const isCurrent = code === currentLocale;
+        const href = getLocalizedPath(code);
+        const shortLabel = locale!.label === '한국어' ? 'KO' : code.toUpperCase();
+        return (
+          <>
+            {i > 0 && <span class="lang-divider" aria-hidden="true" />}
+            {isCurrent ? (
+              <span class="lang-item lang-active" aria-current="true">
+                {shortLabel}
+              </span>
+            ) : (
+              <a class="lang-item" href={href}>
+                {shortLabel}
+              </a>
+            )}
+          </>
+        );
+      })}
+    </nav>
+  )
+}
+
+<style>
+  .lang-switcher {
+    display: flex;
+    align-items: center;
+    height: 2rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+  }
+
+  .lang-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 0.625rem;
+    height: 100%;
+    text-decoration: none;
+    color: var(--sl-color-gray-3);
+    transition: color 0.2s, background 0.2s;
+    cursor: pointer;
+  }
+
+  .lang-item:hover {
+    color: var(--sl-color-white);
+    background: rgba(37, 99, 235, 0.08);
+  }
+
+  .lang-active {
+    color: var(--sl-color-white);
+    background: var(--sl-color-accent);
+    cursor: default;
+  }
+
+  .lang-active:hover {
+    background: var(--sl-color-accent);
+  }
+
+  :root[data-theme='light'] .lang-active {
+    color: #fff;
+  }
+
+  .lang-divider {
+    width: 1px;
+    height: 1rem;
+    background: var(--sl-color-gray-5);
+    flex-shrink: 0;
+  }
+</style>

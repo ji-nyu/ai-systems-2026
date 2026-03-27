@@ -424,24 +424,47 @@ AI 코딩 CLI 도구를 설치하고, DGX H100 서버에 접속하여 첫 번째
 
 ### DGX 서버 접속
 
-<Tabs>
-  <TabItem label="SSH 접속">
-    ```bash
-    ssh [학번]@dgx.chu.ac.kr
-    # 초기 비밀번호는 학번과 동일 — 첫 접속 시 반드시 변경!
-    ```
-  </TabItem>
-  <TabItem label="JupyterHub">
-    브라우저에서 `https://jupyter.chu.ac.kr` 접속 후 학번으로 로그인
-  </TabItem>
-  <TabItem label="VS Code Remote">
-    ```bash
-    # VS Code Remote SSH 확장 설치 후
-    # Ctrl+Shift+P → Remote-SSH: Connect to Host
-    # → dgx.chu.ac.kr
-    ```
-  </TabItem>
-</Tabs>
+DGX 서버는 **Cloudflare Zero Trust**로 보호되어 있다. 접속 전에 반드시 WARP 클라이언트를 설치하고 로그인해야 한다.
+
+<Steps>
+1. **Cloudflare WARP 설치**
+
+   [Cloudflare WARP 다운로드 페이지](https://developers.cloudflare.com/cloudflare-one/team-and-resources/devices/cloudflare-one-client/download/)에서 운영체제에 맞는 클라이언트를 설치한다.
+
+2. **Zero Trust 로그인**
+
+   WARP 실행 → 설정(톱니바퀴) 클릭 → **Preferences → Account** → **Login to Cloudflare Zero Trust** → 팀 이름 입력 → 학교 이메일로 로그인
+
+   <Aside type="note">팀 이름과 서버 주소는 수업 시간에 별도로 안내합니다.</Aside>
+
+3. **SSH 접속**
+
+   WARP 연결이 활성화된 상태에서 터미널을 열고 접속한다.
+
+   <Tabs>
+     <TabItem label="SSH 접속">
+       ```bash
+       ssh {USER}@{SERVER_IP} -p {PORT}
+       # 초기 비밀번호는 학번과 동일 — 첫 접속 시 반드시 변경!
+       ```
+     </TabItem>
+     <TabItem label="JupyterHub">
+       브라우저에서 `https://jupyter.chu.ac.kr` 접속 후 학번으로 로그인
+     </TabItem>
+     <TabItem label="VS Code Remote">
+       ```bash
+       # VS Code Remote SSH 확장 설치 후
+       # Ctrl+Shift+P → Remote-SSH: Connect to Host
+       # → {SERVER_IP}:{PORT}
+       ```
+       <Aside type="tip">VS Code도 WARP가 연결된 상태에서만 접속 가능합니다.</Aside>
+     </TabItem>
+   </Tabs>
+</Steps>
+
+<Aside type="caution" title="접속이 안 될 때">
+연결이 거부되면 먼저 Cloudflare WARP이 **Connected** 상태인지 확인하세요. 상세한 인프라 정보는 [인프라 가이드](/reference/infrastructure)를 참고하세요.
+</Aside>
 
 ## 과제 (Assignment)
 

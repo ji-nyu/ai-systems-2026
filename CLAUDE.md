@@ -33,12 +33,22 @@ make status                      # 콘텐츠 현황 확인
 src/content/docs/
 ├── index.mdx              # 홈 (splash 템플릿)
 ├── syllabus.md             # 강의계획서
-├── weeks/week-{01-16}.mdx  # 16주차 강의노트
-├── labs/lab-{01-12}.mdx    # 12개 실습
+├── weeks/week-{01-16}.mdx  # 16주차 강의노트 (Korean)
+├── labs/lab-{01-12}.mdx    # 12개 실습 (Korean)
 ├── capstone/               # 캡스톤 프로젝트
 ├── reference/              # 참고자료
-└── contribute/             # 기여 가이드
+├── contribute/             # 기여 가이드
+└── en/                     # English locale (mirrors root structure)
+    ├── index.mdx
+    ├── syllabus.md
+    ├── weeks/week-{01-16}.mdx
+    ├── labs/lab-{01-12}.mdx
+    ├── capstone/
+    ├── reference/
+    └── contribute/
 ```
+
+- **다국어**: Korean(root, `/`) + English(`/en/`). Starlight 내장 언어 전환기 사용.
 
 ### 핵심 설정 파일
 

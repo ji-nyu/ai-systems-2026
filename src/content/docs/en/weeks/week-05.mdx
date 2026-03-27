@@ -1,0 +1,165 @@
+---
+title: "Week 5: Context Management and Preventing Context Rot"
+description: Context window management strategies for long-running agents — diagnosing and treating Context Rot
+week: 5
+phase: 2
+phase_title: Harness Engineering
+date: "2026-03-31"
+theory_topics:
+  - Context Rot phenomenon and causes
+  - Deterministic context allocation strategies
+  - State tracking file design patterns
+lab_topics:
+  - Measuring context window usage
+  - Implementing a state tracking system
+assignment: "Lab 05: Context Management Practice"
+assignment_due: "2026-04-07"
+difficulty: intermediate
+estimated_time: "5 hours"
+---
+
+import { Aside, Steps, Badge, Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 2</span>
+  <Badge text="Week 5" variant="note" />
+  <Badge text="Intermediate" variant="danger" />
+</div>
+
+## Theory
+
+### What is Context Rot?
+
+Context Rot is the phenomenon where an agent's context window becomes increasingly polluted over a long session:
+
+<div class="diagram">
+  <div class="diagram__compare">
+    <div class="diagram__node--green" style="padding:0.875rem 1rem;border-radius:0.625rem;border:1px solid rgba(34,197,94,0.25);">
+      <span class="diagram__compare__label" style="color:#22C55E;">Clean Context (initial)</span>
+      <span class="diagram__node__sub">[System Prompt] [Task Spec] [Current Code]</span>
+    </div>
+    <div class="diagram__node--red" style="padding:0.875rem 1rem;border-radius:0.625rem;border:1px solid rgba(239,68,68,0.25);">
+      <span class="diagram__compare__label" style="color:#EF4444;">Context Rot (after 30 attempts)</span>
+      <span class="diagram__node__sub">[System Prompt] [Task Spec] [Failure #1] [Error #1] [Failure #2] [Error #2] ... 128K tokens &#x2192; hallucinations occur, reasoning quality drops sharply</span>
+    </div>
+  </div>
+</div>
+
+<Aside type="danger" title="Context Rot Symptoms">
+- Claims that previously working functions "don't exist"
+- Repeats the same mistakes
+- Confuses old code snippets with the latest version
+- Responses grow longer and lose the point
+</Aside>
+
+### The Ralph Loop Solution: Context Window Wiping
+
+One of the key innovations of the Ralph Loop is **completely resetting the context after a task completes or fails**:
+
+```python
+class RalphContextManager:
+    def __init__(self, max_tokens: int = 100_000):
+        self.max_tokens = max_tokens
+        self.state_file = "claude-progress.txt"
+
+    def should_wipe_context(self, current_tokens: int) -> bool:
+        """Reset context when more than 75% of the window is used"""
+        return current_tokens > self.max_tokens * 0.75
+
+    def build_fresh_context(self) -> str:
+        """Deterministically reconstruct context from the state file"""
+        state = self.load_state()
+        return f"""
+# Project State
+{state['completed_tasks']}
+
+# Current Task
+{state['current_task']}
+
+# Relevant Code (current version only)
+{state['relevant_code_snippet']}
+"""
+
+    def save_state(self, task: str, status: str):
+        """Save state for the next loop iteration"""
+        with open(self.state_file, 'a') as f:
+            f.write(f"[{status}] {task}\n")
+```
+
+### State Tracking File Design Patterns
+
+<div class="diagram">
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--cyan diagram__node--wide">
+      <span class="diagram__node__label">claude-progress.txt</span>
+      <span class="diagram__node__sub">Records completed/failed tasks</span>
+    </div>
+    <div class="diagram__node diagram__node--blue diagram__node--wide">
+      <span class="diagram__node__label">fix_plan.md</span>
+      <span class="diagram__node__sub">Structured task queue</span>
+    </div>
+    <div class="diagram__node diagram__node--purple diagram__node--wide">
+      <span class="diagram__node__label">@codebase_map.md</span>
+      <span class="diagram__node__sub">File structure snapshot (kept up to date)</span>
+    </div>
+  </div>
+</div>
+
+**`fix_plan.md` Template**:
+```markdown
+# Project: Calculator App
+## Completed Tasks
+- [x] Create basic file structure (2026-03-31 14:23)
+- [x] Implement add() function and pass tests (2026-03-31 14:45)
+
+## Current Task
+- [ ] Implement subtract() function
+  - Expected file: calculator.py:15-25
+  - Related tests: tests/test_calculator.py:20-35
+
+## Pending Tasks
+- [ ] multiply() function
+- [ ] divide() function (must handle division-by-zero exception)
+```
+
+## Practicum
+
+<Steps>
+1. **Integrate a Token Counter**
+
+   ```python
+   import anthropic
+
+   def count_tokens(messages: list) -> int:
+       client = anthropic.Anthropic()
+       response = client.messages.count_tokens(
+           model="claude-opus-4-6",
+           messages=messages
+       )
+       return response.input_tokens
+   ```
+
+2. **Automatic Context Monitoring**
+
+   Measure the current context token count on every loop iteration and implement a system that automatically resets it when a threshold is exceeded.
+
+3. **Build a State File System**
+
+   Write helper functions that automatically update `fix_plan.md` and `claude-progress.txt`.
+</Steps>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 05: Context Management Practice
+
+**Submission deadline**: 2026-04-07 23:59
+
+**Requirements**:
+1. Ralph Loop with integrated token counter (`ralph_with_context.sh`)
+2. Context Rot simulation and a graph of measurement results
+3. Automatic context reset logic implementation
+4. Demonstration that the state tracking system (`fix_plan.md` + `claude-progress.txt`) works correctly
+
+</div>

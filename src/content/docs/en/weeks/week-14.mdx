@@ -1,0 +1,91 @@
+---
+title: "Week 14: Ralphthon Execution"
+description: Harness implementation, agent integration, iterative improvement — the Ralphthon in action
+week: 14
+phase: 5
+phase_title: Capstone Ralphthon
+date: "2026-06-02"
+theory_topics:
+  - Real-world harness engineering checkpoints
+  - Team-level agent system integration
+  - Mid-point review and pivot decisions
+lab_topics:
+  - Team Ralphthon execution
+  - Real-time mentoring
+assignment: "Capstone: Mid-Progress Report"
+assignment_due: "2026-06-09"
+difficulty: advanced
+estimated_time: "20 hours (intensive team development)"
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 5</span>
+  <Badge text="Week 14" variant="note" />
+  <Badge text="Ralphthon" variant="success" />
+</div>
+
+## Ralphthon Execution Week
+
+This week focuses on **team development** rather than lectures. The instructor will provide mentoring rounds to each team.
+
+<Aside type="tip" title="The Law of Ralphthon Success">
+Don't aim for a perfect system. **Build a working MVP first, then iterate.** That is the Ralph Loop philosophy itself.
+</Aside>
+
+## Implementation Checkpoints
+
+<Steps>
+1. **Day 1: Foundation (Monday)**
+   - Finalize repository structure
+   - Write PROMPT.md v1
+   - Implement the basic harness script
+   - Successfully run the first agent loop
+
+2. **Day 2–3: Core Features (Tuesday–Wednesday)**
+   - Connect the agent pipeline
+   - Build the automated test suite
+   - Verify the backpressure mechanism
+
+3. **Day 4: Integration and Stabilization (Thursday)**
+   - Run the full pipeline end-to-end
+   - Handle edge cases
+   - Use instruction tuning to fix recurring errors
+
+4. **Day 5: Documentation and Presentation Prep (Friday)**
+   - Write the README
+   - Prepare the demo script
+   - Submit the mid-progress report
+</Steps>
+
+## Common Problems and Solutions
+
+| Problem | Cause | Solution |
+|---------|-------|----------|
+| Agent infinite loop | No exit condition set | Add a hard limit on maximum iterations |
+| Context contamination | Context Rot in progress | Immediately wipe + restore from state file |
+| Conflict between agents | Simultaneous file modification | File locking mechanism |
+| Cost explosion | Unlimited API calls | Set a token budget |
+
+## Mentoring Appointments
+
+Request instructor mentoring in the Slack `#capstone-help` channel. 30 minutes per team.
+
+## Assignment
+
+<div class="assignment-box">
+
+### Capstone: Mid-Progress Report
+
+**Submission deadline**: 2026-06-09 23:59
+
+**Submission path**: `capstone/teams/[team-name]/progress-week14.md`
+
+**Contents**:
+1. List of completed features
+2. Incomplete features and resolution plan
+3. The biggest lesson learned (technical challenge)
+4. Final presentation demo plan
+
+</div>

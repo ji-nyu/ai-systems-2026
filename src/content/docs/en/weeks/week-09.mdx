@@ -1,0 +1,149 @@
+---
+title: "Week 9: Implementing the QA Agent"
+description: Independent quality assurance agent — feedback loops and regression prevention systems
+week: 9
+phase: 3
+phase_title: Multi-Agent SDLC
+date: "2026-04-28"
+theory_topics:
+  - QA agent role and independence principle
+  - Automated test pipeline design
+  - Feedback loops and regression detection
+lab_topics:
+  - Implementing the QA agent
+  - Automating code review
+assignment: "Lab 09: QA Agent Implementation"
+assignment_due: "2026-05-05"
+difficulty: advanced
+estimated_time: "8 hours"
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 3</span>
+  <Badge text="Week 9" variant="note" />
+  <Badge text="Advanced" variant="danger" />
+</div>
+
+## Theory
+
+### The Independence Principle of the QA Agent
+
+The QA Agent **never shares context with the Coder Agent**. Two agents sharing the same context share the same biases, making independent verification impossible.
+
+<Aside type="note" title="QA Agent Independence">
+Even if the Coder has determined "this code is correct," the QA Agent verifies independently — seeing **only the code and tests**, with no knowledge of the Coder's reasoning process.
+</Aside>
+
+### QA Agent Implementation
+
+```python
+# qa_agent.py
+import subprocess
+import anthropic
+from pathlib import Path
+
+class QAAgent:
+    def __init__(self):
+        self.client = anthropic.Anthropic()
+
+    def run_tests(self, test_dir: str) -> dict:
+        """Run pytest and parse results"""
+        result = subprocess.run(
+            ["python", "-m", "pytest", test_dir, "-v", "--tb=short", "--json-report"],
+            capture_output=True, text=True
+        )
+        return {
+            "passed": result.returncode == 0,
+            "output": result.stdout,
+            "errors": result.stderr
+        }
+
+    def code_review(self, diff: str) -> str:
+        """Code review via Claude"""
+        response = self.client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=2048,
+            system="""You are a senior software engineer.
+Review the code diff and check for:
+1. Logic errors
+2. Unhandled edge cases
+3. Security vulnerabilities
+4. Performance issues
+5. Missing tests
+
+Output: JSON {"approved": bool, "issues": [...], "suggestions": [...]}""",
+            messages=[{"role": "user", "content": f"Code review request:\n{diff}"}]
+        )
+        return response.content[0].text
+
+    def review_pr(self, pr_diff: str, test_dir: str) -> dict:
+        """Full PR validation"""
+        test_result = self.run_tests(test_dir)
+        review_result = self.code_review(pr_diff)
+
+        return {
+            "tests_passed": test_result["passed"],
+            "test_output": test_result["output"],
+            "code_review": review_result,
+            "approved": test_result["passed"] and "approved: true" in review_result.lower()
+        }
+```
+
+### Feedback Loop Design
+
+<div class="diagram">
+  <div class="diagram__title">QA FEEDBACK LOOP</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--red">
+      <span class="diagram__node__label">QA Agent detects failure</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange diagram__node--wide">
+      <span class="diagram__node__label">Package failure information</span>
+      <ul>
+        <li>Failed test cases</li>
+        <li>Stack trace</li>
+        <li>Code diff</li>
+      </ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue diagram__node--wide">
+      <span class="diagram__node__label">Reassign to Coder Agent</span>
+      <span class="diagram__node__sub">Add new task to task_queue.json (priority: HIGH)</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">Coder Agent re-runs</span>
+    </div>
+  </div>
+</div>
+
+## Practicum
+
+<Steps>
+1. **Implement the QA Agent** — Complete the `QAAgent` class based on the code above
+
+2. **Automated Code Review Pipeline** — Extract git diff → Claude review → Structure results
+
+3. **Integrate the Feedback Loop** — Automatically reassign to the Coder when QA fails
+
+4. **Full Pipeline Integration** — Run Planner → Coder → QA end-to-end
+</Steps>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 09: QA Agent Implementation
+
+**Submission deadline**: 2026-05-05 23:59
+
+**Requirements**:
+1. Complete `QAAgent` implementation
+2. Automated code review feature (using Claude API)
+3. Feedback loop implementation (QA failure → Coder re-run)
+4. Video or log demonstrating the full Planner → Coder → QA 3-stage pipeline end-to-end
+
+</div>

@@ -1,0 +1,143 @@
+---
+title: "Week 12: Telemetry and LLM-as-Judge"
+description: Measuring agent system quality — OpenTelemetry integration and automated evaluation frameworks
+week: 12
+phase: 4
+phase_title: Open-Source Models & MLOps
+date: "2026-05-19"
+theory_topics:
+  - Telemetry design principles
+  - LLM-as-Judge evaluation methodology
+  - Cost optimization strategies
+lab_topics:
+  - OpenTelemetry integration
+  - LLM-as-Judge implementation
+assignment: "Lab 11 + Lab 12"
+assignment_due: "2026-05-26"
+difficulty: advanced
+estimated_time: "8 hours"
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 4</span>
+  <Badge text="Week 12" variant="note" />
+  <Badge text="Advanced" variant="danger" />
+</div>
+
+## Theory
+
+### Telemetry: The Eyes and Ears of HOTL
+
+In the HOTL architecture, **real-time telemetry** is essential for a human supervisor to trust the agents.
+
+```python
+# telemetry.py — OpenTelemetry-based agent monitoring
+from opentelemetry import trace, metrics
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.metrics import MeterProvider
+
+tracer = trace.get_tracer("ralph-loop")
+meter = metrics.get_meter("ralph-loop")
+
+# Key metrics
+loop_counter = meter.create_counter("ralph.loop.count")
+token_usage = meter.create_histogram("ralph.tokens.used")
+success_rate = meter.create_gauge("ralph.success.rate")
+
+def traced_agent_loop(task: str):
+    with tracer.start_as_current_span("agent_loop") as span:
+        span.set_attribute("task.description", task)
+
+        # Execute the loop
+        result = run_ralph_loop(task)
+
+        # Record metrics
+        loop_counter.add(1, {"status": "success" if result.passed else "failure"})
+        token_usage.record(result.tokens_used)
+
+        span.set_attribute("result.passed", result.passed)
+        span.set_attribute("tokens.used", result.tokens_used)
+
+        return result
+```
+
+### LLM-as-Judge Evaluation Framework
+
+Use an LLM to automatically evaluate **code quality, readability, and design patterns** that are difficult to verify with automated tests alone.
+
+```python
+# llm_judge.py
+import anthropic
+
+JUDGE_SYSTEM_PROMPT = """You are a senior software engineer with 10 years of experience.
+Evaluate the given code on the following criteria, scoring each from 1 to 10:
+
+1. Correctness: Does the code correctly implement the requirements?
+2. Readability: Is the code easy to read?
+3. Efficiency: Are there any unnecessary computations?
+4. Robustness: Are edge cases handled?
+5. Maintainability: Will the code be easy to modify in the future?
+
+Output format:
+{
+  "scores": {"correctness": 8, "readability": 7, ...},
+  "overall": 7.5,
+  "strengths": ["...", "..."],
+  "improvements": ["...", "..."]
+}"""
+
+class LLMJudge:
+    def __init__(self):
+        self.client = anthropic.Anthropic()
+
+    def evaluate(self, code: str, requirement: str) -> dict:
+        import json
+        response = self.client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=1024,
+            system=JUDGE_SYSTEM_PROMPT,
+            messages=[{
+                "role": "user",
+                "content": f"Requirement: {requirement}\n\nCode:\n```python\n{code}\n```"
+            }]
+        )
+        return json.loads(response.content[0].text)
+```
+
+<Aside type="caution" title="Limitations of LLM-as-Judge">
+An LLM Judge may be biased toward surface-level code style over logical correctness.
+It should be used in conjunction with automated tests (pytest) to be trustworthy.
+</Aside>
+
+## Practicum
+
+<Steps>
+1. **OpenTelemetry Integration** — Add tracing and metrics to the Ralph Loop
+
+2. **Dashboard Setup** — Real-time monitoring with Grafana + Prometheus
+
+3. **LLM-as-Judge Implementation** — Complete the `LLMJudge` class and evaluate real code
+
+4. **Cost Optimization Analysis** — Analyze the token usage vs code quality trade-off
+</Steps>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 11: Telemetry & Lab 12: LLM-as-Judge
+
+**Submission deadline**: 2026-05-26 23:59
+
+**Lab 11 Requirements**:
+1. Ralph Loop with OpenTelemetry integration
+2. Grafana dashboard screenshot (loop_count, token_usage, success_rate)
+
+**Lab 12 Requirements**:
+1. Complete `LLMJudge` implementation
+2. Automated evaluation results for 10 code samples
+3. Correlation analysis between LLM Judge and human evaluator scores
+
+</div>

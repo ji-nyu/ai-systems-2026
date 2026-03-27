@@ -1,0 +1,130 @@
+---
+title: "Week 6: Instruction Tuning"
+description: Correcting agent behavior and designing permanent context payloads — the "Sign" metaphor
+week: 6
+phase: 2
+phase_title: Harness Engineering
+date: "2026-04-07"
+theory_topics:
+  - Principles of instruction tuning
+  - The Sign metaphor and adding permanent constraints
+  - Advanced PROMPT.md strategies
+lab_topics:
+  - Analyzing recurring errors in PROMPT.md
+  - Adding instructions and measuring their effect
+assignment: "Lab 06: Instruction Tuning Practice"
+assignment_due: "2026-04-14"
+difficulty: intermediate
+estimated_time: "4 hours"
+---
+
+import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+
+<div class="week-meta">
+  <span class="phase-tag">Phase 2</span>
+  <Badge text="Week 6" variant="note" />
+  <Badge text="Intermediate" variant="danger" />
+</div>
+
+## Theory
+
+### What is Instruction Tuning?
+
+When an agent makes recurring mistakes in the Ralph Loop, we correct its behavior by adding specific, deterministic instructions to PROMPT.md — **without retraining model weights**.
+
+<Aside type="note" title='Huntley&apos;s "Sign" Metaphor'>
+Think of it like placing a "Do Not Climb" warning sign next to a children's playground slide. Instead of redesigning the slide itself (the model), you add clear instructions (a Sign) to the environment.
+</Aside>
+
+### The Instruction Tuning Process
+
+<div class="diagram">
+  <div class="diagram__title">INSTRUCTION TUNING PROCESS</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--red">
+      <span class="diagram__node__label">1. Identify recurring error patterns</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">2. Analyze the specific root cause of each error</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">3. Write a deterministic constraint statement</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">4. Add to the permanent section of PROMPT.md</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--green">
+      <span class="diagram__node__label">5. Verify the effect in the next loop</span>
+    </div>
+  </div>
+</div>
+
+### Example of an Advanced PROMPT.md
+
+```markdown
+# [Permanent Constraints — Never Ignore]
+
+## ⚠️ Known Pitfalls (Instructional Tuning)
+
+### 1. Do not call non-existent functions
+- `utils.parse_json()` does not exist in this project
+- Always use `json.loads()` directly
+- Added: 2026-04-02 (recurring error at loop #47)
+
+### 2. Do not commit without tests
+- `pytest tests/ -q` must pass before any `git commit`
+- CI will auto-rollback on failure
+
+### 3. Type hints are mandatory
+- All functions must include Python type hints
+- `def add(a, b):` → `def add(a: int, b: int) -> int:`
+
+---
+
+# [Current Task]
+...
+```
+
+### Measuring Instruction Effectiveness
+
+| Metric | Measurement Method |
+|--------|-------------------|
+| Recurring error rate | Number of identical error occurrences / total loop count |
+| Average loop count | Number of loops required to complete a task |
+| Context efficiency | Ratio of tokens wasted on unnecessary exploration |
+
+## Practicum
+
+<Steps>
+1. **Error Pattern Analysis Script**
+
+   Analyze execution logs from the previous lab to extract the top 5 recurring errors.
+
+2. **Write and Add Instructions**
+
+   For each recurring error, write a deterministic constraint statement and add it to PROMPT.md.
+
+3. **A/B Testing**
+
+   Run the same task before and after adding instructions, then compare loop counts and token usage.
+</Steps>
+
+## Assignment
+
+<div class="assignment-box">
+
+### Lab 06: Instruction Tuning Practice
+
+**Submission deadline**: 2026-04-14 23:59
+
+**Requirements**:
+1. Recurring error analysis report (minimum 3 patterns)
+2. Enhanced `PROMPT.md` (with instruction section)
+3. Experimental results comparing before and after tuning
+4. Quantitative graph measuring instruction effectiveness
+
+</div>

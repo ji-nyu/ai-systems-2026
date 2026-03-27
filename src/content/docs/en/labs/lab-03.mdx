@@ -1,0 +1,328 @@
+---
+title: "Lab 03: MCP Server Implementation"
+description: Build a FastMCP server with all three primitives (Tool + Resource + Prompt), validate with MCP Inspector, apply security hardening
+week: 3
+difficulty: elementary
+estimated_time: "5 hours"
+assignment_due: "2026-03-24"
+---
+
+import { Steps, Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Elementary" variant="caution" /> <Badge text="Due: 2026-03-24" variant="note" />
+
+## Objectives
+
+- Implement an MCP server with FastMCP (Tool + Resource + Prompt — all three primitives)
+- Validate the server with MCP Inspector
+- Apply input validation and path traversal defense
+- Configure filesystem + Git MCP servers
+
+## MCP Overview
+
+MCP is a protocol that allows AI coding agents to communicate with external tools and data sources in a standardized way. Capabilities are exposed through three primitives — **Tool** (invoked by the model), **Resource** (controlled by the application), and **Prompt** (selected by the user).
+
+<div class="diagram">
+  <div class="diagram__chain">
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">AI Coding Agent</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--purple">
+      <span class="diagram__node__label">MCP Client</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">MCP Server (Tool + Resource + Prompt)</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">Filesystem / Git / Custom API</span>
+    </div>
+  </div>
+</div>
+
+<Aside type="caution" title="MCP Support Status">
+- **Claude Code**: Full support (`~/.claude/settings.json`)
+- **Gemini CLI**: Supported (`~/.gemini/settings.json`)
+- **Codex CLI**: Not supported — use Claude Code or Gemini CLI for MCP labs
+- **OpenCode**: Limited support
+</Aside>
+
+## Implementation Requirements
+
+### 1. MCP Server Configuration — `settings.json`
+
+Add built-in servers to your AI coding CLI's configuration file.
+
+<Tabs>
+  <TabItem label="Claude Code">
+    Config file: `~/.claude/settings.json` (or project-level `.claude/settings.json`)
+  </TabItem>
+  <TabItem label="Gemini CLI">
+    Config file: `~/.gemini/settings.json`
+  </TabItem>
+</Tabs>
+
+```json
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/[student-id]/lab-03"
+      ]
+    },
+    "git": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-git",
+        "--repository",
+        "/home/[student-id]/lab-03"
+      ]
+    }
+  }
+}
+```
+
+<Aside type="tip" title="Path Warning">
+The agent cannot access files outside the path registered with the `filesystem` server. Make sure to specify the lab directory precisely.
+</Aside>
+
+### 2. Environment Setup and Server Verification
+
+<Steps>
+1. **Project Structure and Environment Setup**
+
+   ```bash
+   mkdir -p lab-03-mcp && cd lab-03-mcp
+   python -m venv .venv
+   source .venv/bin/activate
+
+   # Using uv (recommended)
+   uv add "mcp[cli]" fastmcp
+
+   # Using pip
+   pip install fastmcp
+   ```
+
+   ```
+   lab-03-mcp/
+   ├── custom_server.py       # FastMCP server (Tool + Resource + Prompt)
+   ├── settings.json           # MCP configuration
+   └── test_sample.py          # Tests to run via the custom server's run_pytest
+   ```
+
+2. **Check Built-in Server List**
+
+   ```bash
+   claude mcp list
+   # filesystem  npx -y @modelcontextprotocol/server-filesystem ...
+   # git         npx -y @modelcontextprotocol/server-git ...
+   ```
+
+3. **Test the Filesystem Server**
+
+   ```bash
+   claude "Show me the list of files in the current directory."
+   # The list_directory tool from the filesystem server should be called
+   ```
+
+4. **Test the Git Server**
+
+   ```bash
+   git init /home/[student-id]/lab-03
+   claude "Summarize the last 3 commit messages."
+   ```
+</Steps>
+
+### 3. Custom MCP Server — `custom_server.py`
+
+Implement a server using FastMCP that includes **all three primitives** (Tool + Resource + Prompt).
+
+```python
+# custom_server.py
+import os
+import subprocess
+import sys
+from fastmcp import FastMCP
+
+mcp = FastMCP("lab03-custom", description="Lab 03 Practice Server")
+
+# === Allowed path configuration (path traversal defense) ===
+ALLOWED_BASE = os.path.realpath(os.path.dirname(__file__))
+
+
+def _validate_path(path: str) -> str:
+    """Defends against path traversal attacks. Blocks access outside the allowed directory."""
+    real_path = os.path.realpath(path)
+    if not real_path.startswith(ALLOWED_BASE):
+        raise ValueError(
+            f"Access denied: {path} — outside allowed scope ({ALLOWED_BASE})"
+        )
+    return real_path
+
+
+# === Tool 1: Run pytest ===
+@mcp.tool()
+def run_pytest(path: str) -> str:
+    """Runs pytest in the specified directory and returns the results.
+
+    Args:
+        path: Directory path where pytest should be run
+    """
+    safe_path = _validate_path(path)
+    try:
+        result = subprocess.run(
+            ["python", "-m", "pytest", safe_path, "-v", "--tb=short"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return result.stdout + result.stderr
+    except subprocess.TimeoutExpired:
+        return "ERROR: pytest execution timed out (60 seconds)"
+    except Exception as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        return f"ERROR: {e}"
+
+
+# === Tool 2: Count lines ===
+@mcp.tool()
+def count_lines(file_path: str) -> str:
+    """Returns the number of lines in a file.
+
+    Args:
+        file_path: Path to the file to count lines in
+    """
+    safe_path = _validate_path(file_path)
+    try:
+        with open(safe_path, "r") as f:
+            lines = f.readlines()
+        return f"{len(lines)} lines"
+    except FileNotFoundError:
+        return f"ERROR: File not found — {file_path}"
+    except Exception as e:
+        print(f"[ERROR] {e}", file=sys.stderr)
+        return f"ERROR: {e}"
+
+
+# === Resource: Project statistics ===
+@mcp.resource("project://stats")
+def project_stats() -> str:
+    """Returns file statistics for the project directory."""
+    py_files = []
+    for root, _dirs, files in os.walk(ALLOWED_BASE):
+        for f in files:
+            if f.endswith(".py"):
+                py_files.append(os.path.join(root, f))
+    total_lines = 0
+    for fp in py_files:
+        try:
+            with open(fp) as f:
+                total_lines += len(f.readlines())
+        except Exception:
+            pass
+    return (
+        f"Python files: {len(py_files)}\n"
+        f"Total lines: {total_lines}\n"
+        f"Project path: {ALLOWED_BASE}"
+    )
+
+
+# === Prompt: Code review ===
+@mcp.prompt()
+def code_review(file_path: str) -> str:
+    """A structured prompt template for requesting a code review.
+
+    Args:
+        file_path: Path to the file to review
+    """
+    return (
+        f"Please code review the following file: {file_path}\n\n"
+        f"Review criteria:\n"
+        f"1. Security vulnerabilities (path traversal, command injection, input validation)\n"
+        f"2. Error handling (exception handling, safe failures)\n"
+        f"3. Code quality (readability, naming, structure)\n"
+        f"4. Testability (is the design easy to test?)"
+    )
+
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+<Aside type="danger" title="Security: Path Traversal and Command Injection">
+
+Three vulnerabilities you must defend against in a custom MCP server:
+
+1. **Path Traversal**: Input like `../../etc/passwd` allows access to files outside the permitted scope. Use `os.path.realpath` to resolve symbolic links and compare against the allowed path.
+2. **Command Injection**: Running user input with `shell=True` allows arbitrary commands to execute. Always pass arguments as a list and keep `shell=False` (the default).
+3. **Tool Description Injection**: An attack that inserts hidden instructions into a tool's `description` to manipulate the agent. Always be suspicious of tool descriptions from third-party MCP servers.
+
+</Aside>
+
+### 4. Register the Custom Server
+
+Add the custom server to `settings.json`.
+
+```json
+{
+  "mcpServers": {
+    "filesystem": { "...": "..." },
+    "git": { "...": "..." },
+    "custom": {
+      "command": "python",
+      "args": ["/home/[student-id]/lab-03-mcp/custom_server.py"]
+    }
+  }
+}
+```
+
+### 5. Validate with MCP Inspector
+
+```bash
+# Run Inspector
+npx @modelcontextprotocol/inspector python custom_server.py
+
+# Go to http://localhost:6274 in your browser, then:
+# 1. tools/list → verify run_pytest, count_lines
+# 2. resources/list → verify project://stats
+# 3. prompts/list → verify code_review
+# 4. tools/call → run run_pytest and check the result
+# 5. Capture screenshots (for assignment submission)
+```
+
+<Aside type="tip" title="Inspector Validation Checklist">
+Confirm all three primitives are registered:
+- `tools/list` → 2 or more tools
+- `resources/list` → 1 or more resources
+- `prompts/list` → 1 or more prompts
+</Aside>
+
+### 6. Verify Custom Tool Behavior
+
+```bash
+claude "Run pytest in the lab-03-mcp directory."
+# The run_pytest tool should be called
+```
+
+## Deliverables
+
+Submit a PR to `assignments/lab-03/[student-id]/`:
+
+- [ ] `settings.json` — Configuration file with filesystem, git, and custom servers registered
+- [ ] `custom_server.py` — FastMCP-based implementation with **all three primitives** (Tool + Resource + Prompt)
+- [ ] `test_sample.py` — Test file to be run via the custom server's `run_pytest` (minimum 3 tests)
+- [ ] Inspector screenshots — Confirming `tools/list`, `resources/list`, `prompts/list`
+- [ ] `README.md` — Verification results for each MCP server, security validation (path traversal blocking test), troubleshooting notes
+
+<Aside type="caution" title="Security Consideration">
+MCP servers grant powerful permissions to AI coding agents. Make sure to verify:
+- Does `_validate_path()` block path traversal? (test with `../../etc/passwd` input)
+- Is a `timeout` set for `subprocess` calls?
+- Are error logs written to **stderr**? (to prevent stdout contamination)
+</Aside>

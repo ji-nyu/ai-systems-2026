@@ -1,0 +1,376 @@
+---
+title: "Lab 09: QA Agent Implementation"
+description: QAAgent class, automated code review, feedback loop, end-to-end demonstration
+week: 9
+difficulty: advanced
+estimated_time: "8 hours"
+assignment_due: "2026-05-05"
+---
+
+import { Steps, Aside, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Advanced" variant="danger" /> <Badge text="Due: 2026-05-05" variant="note" />
+
+## Objectives
+
+- Implement the `QAAgent` class — automated test execution, coverage measurement, code review
+- Implement a feedback loop between the QA agent and the coder agent
+- Demonstrate the Planner → Coder → QA 3-stage pipeline end-to-end
+
+## The Role of the QA Agent
+
+The QA agent is the quality gate that validates the coder's output and provides feedback.
+
+<div class="diagram">
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">CoderAgent</span>
+      <span class="diagram__node__sub">code changes</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange diagram__node--wide">
+      <span class="diagram__node__label">QAAgent</span>
+      <ul>
+        <li>Run pytest</li>
+        <li>Measure coverage</li>
+        <li>LLM code review</li>
+        <li>Verdict</li>
+      </ul>
+    </div>
+    <div class="diagram__branch">
+      <div class="diagram__node--green" style="padding:0.625rem 0.75rem;border-radius:0.5rem;border:1px solid rgba(34,197,94,0.25);display:flex;flex-direction:column;align-items:center;gap:0.15rem;font-size:0.8rem;font-weight:600;color:#22C55E;">
+        <span class="diagram__branch__icon">&#10003;</span>
+        <span>Pass</span>
+        <span class="diagram__branch__desc">ReviewerAgent</span>
+      </div>
+      <div class="diagram__node--red" style="padding:0.625rem 0.75rem;border-radius:0.5rem;border:1px solid rgba(239,68,68,0.25);display:flex;flex-direction:column;align-items:center;gap:0.15rem;font-size:0.8rem;font-weight:600;color:#EF4444;">
+        <span class="diagram__branch__icon">&#10007;</span>
+        <span>Fail</span>
+        <span class="diagram__branch__desc">CoderAgent (retry)</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+## Implementation Requirements
+
+### 1. `qa_runner.py` — Test Execution Engine
+
+```python
+# qa_runner.py
+import subprocess
+import json
+import re
+from dataclasses import dataclass
+from pathlib import Path
+
+@dataclass
+class TestResult:
+    passed: int
+    failed: int
+    errors: int
+    duration_sec: float
+    coverage_pct: float | None
+    failed_tests: list[str]
+    full_output: str
+
+    @property
+    def all_passed(self) -> bool:
+        return self.failed == 0 and self.errors == 0
+
+    def to_summary(self) -> str:
+        status = "PASS" if self.all_passed else "FAIL"
+        lines = [
+            f"[{status}] Passed: {self.passed} | Failed: {self.failed} | Errors: {self.errors}",
+            f"Duration: {self.duration_sec:.2f}s",
+        ]
+        if self.coverage_pct is not None:
+            lines.append(f"Coverage: {self.coverage_pct:.1f}%")
+        if self.failed_tests:
+            lines.append("Failed tests:")
+            lines.extend(f"  - {t}" for t in self.failed_tests)
+        return "\n".join(lines)
+
+
+class TestRunner:
+    def __init__(self, test_dir: str = "tests/"):
+        self.test_dir = test_dir
+
+    def run(self, with_coverage: bool = True) -> TestResult:
+        cmd = ["python", "-m", "pytest", self.test_dir, "-v", "--tb=short", "--json-report"]
+        if with_coverage:
+            cmd.extend([
+                f"--cov={self.test_dir.replace('tests/', 'src/')}",
+                "--cov-report=json"
+            ])
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        return self._parse_output(result)
+
+    def _parse_output(self, result: subprocess.CompletedProcess) -> TestResult:
+        output = result.stdout + result.stderr
+
+        # Parse pytest JSON report (when using --json-report)
+        report_path = Path(".report.json")
+        if report_path.exists():
+            report = json.loads(report_path.read_text())
+            summary = report.get("summary", {})
+            failed_tests = [
+                t["nodeid"] for t in report.get("tests", [])
+                if t["outcome"] in ("failed", "error")
+            ]
+        else:
+            # Fallback: text parsing
+            passed  = len(re.findall(r"PASSED", output))
+            failed  = len(re.findall(r"FAILED", output))
+            summary = {"passed": passed, "failed": failed, "error": 0}
+            failed_tests = re.findall(r"FAILED (.+?) -", output)
+
+        # Parse coverage
+        coverage_pct = None
+        cov_path = Path("coverage.json")
+        if cov_path.exists():
+            cov = json.loads(cov_path.read_text())
+            coverage_pct = cov.get("totals", {}).get("percent_covered")
+
+        duration_match = re.search(r"(\d+\.\d+)s", output)
+        duration = float(duration_match.group(1)) if duration_match else 0.0
+
+        return TestResult(
+            passed=summary.get("passed", 0),
+            failed=summary.get("failed", 0),
+            errors=summary.get("error", 0),
+            duration_sec=duration,
+            coverage_pct=coverage_pct,
+            failed_tests=failed_tests,
+            full_output=output[:2000]
+        )
+```
+
+### 2. `code_reviewer.py` — LLM-based Code Reviewer
+
+```python
+# code_reviewer.py
+import subprocess
+import anthropic
+from dataclasses import dataclass
+
+@dataclass
+class ReviewResult:
+    severity: str   # "pass" | "warn" | "block"
+    issues: list[str]
+    suggestions: list[str]
+    score: int      # 0-100
+
+    def should_block(self) -> bool:
+        return self.severity == "block" or self.score < 40
+
+REVIEW_SYSTEM = """
+You are a strict code reviewer. Review the provided git diff and identify:
+1. Security vulnerabilities (BLOCK if found)
+2. Logic errors that tests might miss (BLOCK if severe)
+3. Code style issues (WARN)
+4. Performance concerns (WARN)
+
+Respond in JSON:
+{
+  "severity": "pass|warn|block",
+  "issues": ["issue1", "issue2"],
+  "suggestions": ["suggestion1"],
+  "score": 0-100,
+  "reasoning": "brief explanation"
+}
+"""
+
+class CodeReviewer:
+    def __init__(self):
+        self.client = anthropic.Anthropic()
+
+    def review_diff(self, diff: str) -> ReviewResult:
+        if not diff.strip():
+            return ReviewResult("pass", [], [], 100)
+
+        response = self.client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=REVIEW_SYSTEM,
+            messages=[{
+                "role": "user",
+                "content": f"Review this diff:\n```diff\n{diff[:3000]}\n```"
+            }]
+        )
+
+        import json, re
+        text = response.content[0].text
+        match = re.search(r"\{[\s\S]+\}", text)
+        if not match:
+            return ReviewResult("warn", ["Review parsing failed"], [], 50)
+
+        data = json.loads(match.group())
+        return ReviewResult(
+            severity=data.get("severity", "warn"),
+            issues=data.get("issues", []),
+            suggestions=data.get("suggestions", []),
+            score=data.get("score", 50)
+        )
+
+    def get_diff(self) -> str:
+        result = subprocess.run(
+            ["git", "diff", "HEAD"],
+            capture_output=True, text=True
+        )
+        return result.stdout
+```
+
+### 3. `qa_agent.py` — QA Agent Main
+
+```python
+# qa_agent.py
+from qa_runner import TestRunner, TestResult
+from code_reviewer import CodeReviewer, ReviewResult
+from dataclasses import dataclass
+
+@dataclass
+class QAReport:
+    iteration: int
+    test_result: TestResult
+    review_result: ReviewResult
+    verdict: str         # "approve" | "request_changes" | "reject"
+    feedback: str        # Feedback to pass to the coder agent
+
+class QAAgent:
+    MAX_REVIEW_RETRIES = 3
+
+    def __init__(self, test_dir: str = "tests/"):
+        self.runner = TestRunner(test_dir)
+        self.reviewer = CodeReviewer()
+        self.history: list[QAReport] = []
+
+    def evaluate(self, iteration: int = 1) -> QAReport:
+        print(f"[QA] Iteration {iteration} — running tests...")
+        test_result = self.runner.run(with_coverage=True)
+        print(test_result.to_summary())
+
+        print("[QA] Running code review...")
+        diff = self.reviewer.get_diff()
+        review_result = self.reviewer.review_diff(diff)
+
+        verdict, feedback = self._decide(test_result, review_result)
+        report = QAReport(
+            iteration=iteration,
+            test_result=test_result,
+            review_result=review_result,
+            verdict=verdict,
+            feedback=feedback
+        )
+        self.history.append(report)
+        return report
+
+    def _decide(
+        self, test: TestResult, review: ReviewResult
+    ) -> tuple[str, str]:
+        if not test.all_passed:
+            feedback = (
+                f"{test.failed} test(s) failed:\n"
+                + "\n".join(f"- {t}" for t in test.failed_tests[:5])
+                + f"\n\nTest output:\n{test.full_output[:500]}"
+            )
+            return "request_changes", feedback
+
+        if review.should_block():
+            feedback = (
+                f"Code review blocked (score: {review.score}/100):\n"
+                + "\n".join(f"- {i}" for i in review.issues)
+            )
+            return "reject", feedback
+
+        if review.severity == "warn":
+            feedback = (
+                "Tests passed, with warnings:\n"
+                + "\n".join(f"- {i}" for i in review.issues)
+            )
+            return "approve", feedback
+
+        coverage = test.coverage_pct or 0
+        if coverage < 70:
+            return "request_changes", f"Coverage {coverage:.1f}% — minimum 70% required"
+
+        return "approve", f"All tests passed. Coverage: {coverage:.1f}%"
+```
+
+### 4. End-to-End Pipeline
+
+```python
+# pipeline_e2e.py
+from planner_agent import PlannerAgent
+from coder_agent import CoderAgent
+from qa_agent import QAAgent
+
+def run_pipeline(objective: str, codebase_root: str = "."):
+    MAX_CODER_RETRIES = 3
+
+    # Stage 1: Planning
+    print("=" * 50)
+    print("STAGE 1: PLANNING")
+    planner = PlannerAgent(codebase_root)
+    plan = planner.plan(objective)
+
+    # Stage 2: Coding + QA feedback loop
+    coder = CoderAgent()
+    qa = QAAgent()
+
+    for attempt in range(1, MAX_CODER_RETRIES + 1):
+        print(f"\n{'=' * 50}")
+        print(f"STAGE 2: CODING (attempt {attempt}/{MAX_CODER_RETRIES})")
+
+        coder_input = {"plan": plan}
+        if attempt > 1 and qa.history:
+            last_feedback = qa.history[-1].feedback
+            coder_input["feedback"] = last_feedback
+            print(f"[Pipeline] Passing QA feedback to coder:\n{last_feedback[:200]}")
+
+        coder.run(coder_input)
+
+        print(f"\n{'=' * 50}")
+        print(f"STAGE 3: QA (attempt {attempt})")
+        report = qa.evaluate(iteration=attempt)
+
+        print(f"[Pipeline] QA verdict: {report.verdict}")
+        if report.verdict == "approve":
+            print("[Pipeline] Pipeline complete — approved")
+            return report
+
+    print(f"[Pipeline] Maximum attempts exceeded — pipeline failed")
+    return qa.history[-1] if qa.history else None
+
+if __name__ == "__main__":
+    result = run_pipeline(
+        objective="Add ZeroDivisionError handling to the divide() function.",
+        codebase_root="."
+    )
+    if result:
+        print(f"\nFinal result: {result.verdict}")
+```
+
+<Steps>
+1. Implement `qa_runner.py`: `pip install pytest pytest-json-report pytest-cov`
+2. Implement `code_reviewer.py` and test in isolation: `python -c "from code_reviewer import CodeReviewer; r = CodeReviewer(); print(r.review_diff('+ x = 1/0'))"`
+3. Implement `qa_agent.py`
+4. Run end-to-end with `pipeline_e2e.py`
+5. Confirm a scenario where QA sends feedback to the coder at least once
+</Steps>
+
+## Deliverables
+
+Submit a PR to `assignments/lab-09/[student-id]/`:
+
+- [ ] `qa_runner.py` — pytest execution and coverage collection
+- [ ] `code_reviewer.py` — LLM-based diff review
+- [ ] `qa_agent.py` — Complete QA agent with verdict logic
+- [ ] `pipeline_e2e.py` — Planner→Coder→QA 3-stage pipeline
+- [ ] `qa_reports/` — Actual QA report JSON from execution (minimum 2 runs)
+- [ ] `README.md` — End-to-end execution results, feedback loop behavior description, coverage figures
+
+<Aside type="note" title="Grading Points">
+Bonus points are awarded for creating a scenario where the LLM reviewer detects issues that tests miss (e.g., security vulnerabilities, race conditions), rather than simply running tests.
+</Aside>

@@ -1,0 +1,232 @@
+---
+title: "Lab 12: LLM-as-Judge Implementation"
+description: Implement the LLMJudge class, evaluate 10 code samples, analyze correlation with human evaluators
+week: 12
+difficulty: advanced
+estimated_time: "6 hours"
+assignment_due: "2026-05-26"
+---
+
+import { Steps, Aside, Badge } from '@astrojs/starlight/components';
+
+<Badge text="Advanced" variant="danger" /> <Badge text="Due: 2026-05-26" variant="note" />
+
+## Objectives
+
+- Fully implement the `LLMJudge` class — automated code evaluation across 5 criteria
+- Generate automated evaluation results for 10 code samples
+- Measure Pearson correlation between LLM Judge results and human evaluator results
+
+## LLM-as-Judge Overview
+
+In agentic systems, automated tests (pytest) verify logical correctness, but quality indicators like **readability, maintainability, and design patterns** are difficult to automate. LLM-as-Judge fills this gap by using Claude as an evaluator.
+
+```
+Code + Requirements
+      ↓
+LLM Judge (Claude)
+      ↓
+Score (1-10) + Strengths / Areas for Improvement
+      ↓
+QA Pipeline Integration
+```
+
+## Implementation Requirements
+
+### 1. `llm_judge.py` — LLM Evaluation System
+
+```python
+# llm_judge.py
+import json
+import re
+import anthropic
+from dataclasses import dataclass
+
+JUDGE_SYSTEM = """You are a senior software engineer with 10 years of experience.
+Evaluate the provided code against the following 5 criteria, scoring each from 1 to 10.
+
+1. Correctness: Does it correctly implement the requirements?
+2. Readability: Is the code clear and easy to read?
+3. Efficiency: Are there no unnecessary computations or redundancy?
+4. Robustness: Does it handle edge cases and exceptions?
+5. Maintainability: Is it easy to modify and extend in the future?
+
+You must respond in JSON format only."""
+
+
+@dataclass
+class JudgeScore:
+    correctness: float
+    readability: float
+    efficiency: float
+    robustness: float
+    maintainability: float
+    overall: float
+    strengths: list[str]
+    improvements: list[str]
+    reasoning: str
+
+    def to_dict(self) -> dict:
+        return {
+            "scores": {
+                "correctness": self.correctness,
+                "readability": self.readability,
+                "efficiency": self.efficiency,
+                "robustness": self.robustness,
+                "maintainability": self.maintainability,
+            },
+            "overall": self.overall,
+            "strengths": self.strengths,
+            "improvements": self.improvements,
+            "reasoning": self.reasoning,
+        }
+
+
+class LLMJudge:
+    def __init__(self, model: str = "claude-sonnet-4-6"):
+        self.client = anthropic.Anthropic()
+        self.model = model
+        self.evaluation_history: list[dict] = []
+
+    def evaluate(self, code: str, requirement: str, sample_id: str = "") -> JudgeScore:
+        user_msg = f"Requirement:\n{requirement}\n\nCode:\n```\n{code}\n```"
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=1024,
+            system=JUDGE_SYSTEM,
+            messages=[{"role": "user", "content": user_msg}]
+        )
+
+        text = response.content[0].text
+        match = re.search(r"\{[\s\S]+\}", text)
+        if not match:
+            raise ValueError(f"JSON parsing failed: {text[:200]}")
+
+        data = json.loads(match.group())
+        scores = data.get("scores", {})
+
+        result = JudgeScore(
+            correctness=scores.get("correctness", 5),
+            readability=scores.get("readability", 5),
+            efficiency=scores.get("efficiency", 5),
+            robustness=scores.get("robustness", 5),
+            maintainability=scores.get("maintainability", 5),
+            overall=data.get("overall", 5.0),
+            strengths=data.get("strengths", []),
+            improvements=data.get("improvements", []),
+            reasoning=data.get("reasoning", ""),
+        )
+
+        self.evaluation_history.append({
+            "sample_id": sample_id,
+            "requirement": requirement[:100],
+            "code_length": len(code),
+            "score": result.to_dict(),
+        })
+        return result
+
+    def batch_evaluate(self, samples: list[dict]) -> list[JudgeScore]:
+        results = []
+        for i, s in enumerate(samples):
+            print(f"[LLMJudge] Evaluating {i+1}/{len(samples)}: {s.get('id', '')}")
+            score = self.evaluate(
+                code=s["code"],
+                requirement=s["requirement"],
+                sample_id=s.get("id", str(i))
+            )
+            results.append(score)
+        return results
+
+    def save_results(self, path: str = "judge_results.json"):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.evaluation_history, f, ensure_ascii=False, indent=2)
+        print(f"[LLMJudge] Results saved: {path}")
+```
+
+### 2. `samples.py` — 10 Evaluation Code Samples
+
+Define 10 code samples of varying quality as `SAMPLES: list[dict]`.
+
+Each sample has the following structure:
+```python
+{
+    "id": "sample-01-good",
+    "requirement": "Returns the minimum and maximum values from a list of integers.",
+    "code": "def min_max(nums: list[int]) -> tuple[int, int]: ..."
+}
+```
+
+Include approximately 3–4 samples each of good code (`-good`), medium code (`-medium`), and poor code (`-poor`).
+
+### 3. `correlation_analysis.py` — Correlation Analysis
+
+```python
+# correlation_analysis.py
+import json
+import statistics
+from pathlib import Path
+
+def pearson_correlation(x: list[float], y: list[float]) -> float:
+    n = len(x)
+    if n < 2:
+        return 0.0
+    mx, my = statistics.mean(x), statistics.mean(y)
+    num = sum((xi - mx) * (yi - my) for xi, yi in zip(x, y))
+    dx = sum((xi - mx) ** 2 for xi in x) ** 0.5
+    dy = sum((yi - my) ** 2 for yi in y) ** 0.5
+    return num / (dx * dy) if dx and dy else 0.0
+
+# Human evaluator scores (graded manually)
+HUMAN_SCORES = {
+    "sample-01-good":   9.0,
+    "sample-02-poor":   4.0,
+    "sample-03-good":   8.5,
+    # ... all 10 samples scored
+}
+
+def analyze(results_path: str = "judge_results.json"):
+    data = json.loads(Path(results_path).read_text())
+    llm   = [d["score"]["overall"] for d in data]
+    human = [HUMAN_SCORES.get(d["sample_id"], 5.0) for d in data]
+    r = pearson_correlation(llm, human)
+    print(f"Pearson correlation coefficient: {r:.3f}")
+    return r
+```
+
+## Lab Steps
+
+<Steps>
+1. `samples.py` — Define 10 code samples (balanced ratio of good/medium/poor)
+
+2. `llm_judge.py` — Implement `LLMJudge` and test in isolation
+
+3. Run batch evaluation:
+   ```bash
+   python -c "
+   from llm_judge import LLMJudge
+   from samples import SAMPLES
+   j = LLMJudge()
+   j.batch_evaluate(SAMPLES)
+   j.save_results('judge_results.json')
+   "
+   ```
+
+4. Grade all 10 samples manually to complete the `HUMAN_SCORES` dictionary
+
+5. Calculate and interpret the correlation coefficient with `python correlation_analysis.py`
+</Steps>
+
+## Deliverables
+
+Submit a PR to `assignments/lab-12/[student-id]/`:
+
+- [ ] `llm_judge.py` — 5-criteria evaluation class
+- [ ] `samples.py` — 10 code samples (balanced good/medium/poor)
+- [ ] `judge_results.json` — Actual LLM evaluation results
+- [ ] `correlation_analysis.py` — Correlation analysis script
+- [ ] `README.md` — Correlation coefficient results, bias analysis of LLM Judge, improvement directions
+
+<Aside type="note" title="Grading Points">
+More important than the correlation coefficient number itself is analyzing **why the LLM Judge gave different scores than the human evaluator**.
+If you discover biases in the LLM Judge (e.g., preference for longer code, higher scores for well-commented code), document them in your report.
+</Aside>
