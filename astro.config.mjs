@@ -14,6 +14,33 @@ export default defineConfig({
   site: 'https://ai-systems-2026.halla.ai',
   integrations: [
     starlight({
+      head: [
+        {
+          // 주차 페이지 진입 시 해당 Phase ± 1 사이드바 메뉴 동적 펼침
+          tag: 'script',
+          content: `
+            document.addEventListener('DOMContentLoaded',function(){
+              var m=location.pathname.match(/\\/(?:en\\/)?weeks\\/week-(\\d+)/);
+              if(!m)return;
+              var w=parseInt(m[1],10);
+              var p=w<=3?1:w<=6?2:w<=9?3:w<=12?4:5;
+              var details=document.querySelectorAll('.sidebar-content details');
+              details.forEach(function(d){
+                var lbl=d.querySelector('.group-label .large');
+                if(!lbl)return;
+                var t=lbl.textContent;
+                for(var i=1;i<=5;i++){
+                  if(t.indexOf('Phase '+i)!==-1){
+                    if(Math.abs(i-p)<=1)d.setAttribute('open','');
+                    else d.removeAttribute('open');
+                    break;
+                  }
+                }
+              });
+            });
+          `,
+        },
+      ],
       title: {
         ko: 'AI 시스템 2026',
         en: 'AI Systems 2026',

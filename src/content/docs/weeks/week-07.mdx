@@ -598,6 +598,10 @@ Tier 2 (Tier 1 의존):  TASK-005            → 단독 실행
 LESSON 파일의 `domain`과 `component` 필드가 **조직의 기억**을 구현한다. 미래에 인증 관련 요구사항이 들어오면, Planner Agent가 `domain:API` + `component:API/auth`로 기존 교훈을 자동 검색하여 같은 실수를 반복하지 않는다. 이것이 에이전틱 SDLC가 반복할수록 나아지는 메커니즘이다.
 </Aside>
 
+<Aside type="tip" title="아티팩트 직렬화 포맷 선택">
+에이전트 간 아티팩트를 JSON으로 설계할 때, **compact JSON**(공백/줄바꿈 제거)을 기본으로 사용하라. [Week 5](/weeks/week-05/)에서 다룬 것처럼 pretty-print JSON 대비 **25-40%** 토큰을 절약할 수 있다. 대규모 균일 배열(100+ rows)이 아티팩트에 포함되면 CSV나 TOON 같은 테이블 포맷을 검토하되, 토큰 효율과 정확도의 트레이드오프를 반드시 측정하라.
+</Aside>
+
 ---
 
 ### 멀티에이전트 코드 리뷰 설계
