@@ -103,7 +103,7 @@ lastUpdated: 2026-03-03
 - [vLLM 공식 문서](https://docs.vllm.ai)
 - [DeepSeek-Coder-V2 논문](https://arxiv.org/abs/2406.11931)
 - [Gemini CLI 문서](https://github.com/google-gemini/gemini-cli) — Google의 AI 코딩 CLI
-- [Codex CLI 문서](https://github.com/openai/codex-cli) — OpenAI의 터미널 코딩 에이전트
+- [Codex CLI 문서](https://github.com/openai/codex) — OpenAI의 터미널 코딩 에이전트
 
 ## 수강 전 요구사항
 

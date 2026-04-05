@@ -20,7 +20,7 @@ description: AI 시스템 2026 강의 참고자료 모음
 ### 공식 문서
 - [Anthropic Claude Code 문서](https://docs.anthropic.com/claude-code)
 - [Gemini CLI (Google)](https://github.com/google-gemini/gemini-cli)
-- [Codex CLI (OpenAI)](https://github.com/openai/codex-cli)
+- [Codex CLI (OpenAI)](https://github.com/openai/codex)
 - [OpenCode](https://github.com/opencode-ai/opencode)
 - [Model Context Protocol 공식 문서](https://modelcontextprotocol.io)
 - [vLLM 문서](https://docs.vllm.ai)

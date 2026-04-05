@@ -20,7 +20,7 @@ This section collects tools, papers, terminology, and infrastructure guides rela
 ### Official Documentation
 - [Anthropic Claude Code Docs](https://docs.anthropic.com/claude-code)
 - [Gemini CLI (Google)](https://github.com/google-gemini/gemini-cli)
-- [Codex CLI (OpenAI)](https://github.com/openai/codex-cli)
+- [Codex CLI (OpenAI)](https://github.com/openai/codex)
 - [OpenCode](https://github.com/opencode-ai/opencode)
 - [Model Context Protocol Official Docs](https://modelcontextprotocol.io)
 - [vLLM Docs](https://docs.vllm.ai)

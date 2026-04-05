@@ -52,8 +52,8 @@ description: Academic papers, blog posts, and official documentation for the AI 
 
 - [Anthropic Claude Documentation](https://docs.anthropic.com)
 - [Gemini CLI (Google)](https://github.com/google-gemini/gemini-cli) — Google's AI coding CLI
-- [Codex CLI (OpenAI)](https://github.com/openai/codex-cli) — OpenAI's terminal coding agent
-- [Model Context Protocol Specification](https://spec.modelcontextprotocol.io)
+- [Codex CLI (OpenAI)](https://github.com/openai/codex) — OpenAI's terminal coding agent
+- [Model Context Protocol Specification](https://modelcontextprotocol.io/specification/2025-11-25)
 - [vLLM Documentation](https://docs.vllm.ai)
 - [NVIDIA MIG User Guide](https://docs.nvidia.com/datacenter/tesla/mig-user-guide/)
 - [Kubernetes Documentation](https://kubernetes.io/docs)

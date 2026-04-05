@@ -103,7 +103,7 @@ Upon completing this course, students will be able to:
 - [vLLM Official Docs](https://docs.vllm.ai)
 - [DeepSeek-Coder-V2 Paper](https://arxiv.org/abs/2406.11931)
 - [Gemini CLI Docs](https://github.com/google-gemini/gemini-cli) — Google's AI coding CLI
-- [Codex CLI Docs](https://github.com/openai/codex-cli) — OpenAI's terminal coding agent
+- [Codex CLI Docs](https://github.com/openai/codex) — OpenAI's terminal coding agent
 
 ## Prerequisites
 
