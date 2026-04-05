@@ -25,6 +25,7 @@ import { Aside, Steps, Tabs, TabItem, Badge, Card, CardGrid } from '@astrojs/sta
   <span class="phase-tag">Phase 2</span>
   <Badge text="Week 4" variant="note" />
   <Badge text="Intermediate" variant="danger" />
+  <Badge text="Lecture: 2026-03-24" variant="default" />
 </div>
 
 ## Theory
@@ -93,6 +94,43 @@ See the pattern? All three **call the same model repeatedly** while filtering re
 <Aside type="note" title="Your 8 Hours of Sleep = 100 Improvements for Someone Else">
 The core insight of test-time compute: you don't need to wait for a better model. Run a loop with the model you have now. Start a loop at 10 PM, check results at 6 AM — in those 8 hours, the agent will have made dozens to hundreds of attempts. Test-time compute accumulates with every attempt.
 </Aside>
+
+#### The "22-Point Harness Swing" — The Harness Matters More Than the Model
+
+The 2026 SWE-bench benchmark provides empirical proof of this lecture's central claim:
+
+| Benchmark | Claude Opus 4.5 Score | Description |
+|-----------|----------------------|-------------|
+| **SWE-bench Verified** | **80.9%** | Validated issue set, standard scaffold |
+| **SWE-bench Pro** | **45.9%** | More realistic issues, minimal scaffold |
+
+**The same model** yields a **35 pp gap** purely from the difference in harness/scaffold. GPT-5.3-Codex leads on Pro at 56.8%, but that too is thanks to OpenAI's own agent harness.
+
+<Aside type="danger" title="The Empirical Case for Phase 2">
+"Waiting for a better model" vs. "building a better harness" — where should you invest? The SWE-bench data is unambiguous: the same model can swing by 22 pp or more depending on the harness. This is the entire rationale for Phase 2 (Harness Engineering).
+</Aside>
+
+#### T2 Scaling: Inference Cost Changes Pretraining Strategy
+
+The **T2 scaling laws** published in April 2026 (arxiv 2604.01411) dig one level deeper into the economics of test-time compute. The original Chinchilla work (2022) optimized only training compute costs; T2 **recalculates the optimal point including inference costs**.
+
+Key findings:
+- When inference costs are factored in, **overtraining beyond the Chinchilla optimum is advantageous** — training a smaller model longer reduces the per-token cost at inference time
+- This directly connects to the loop paradigm: **running a small model many times** can be more economical than running a large model a few times
+- A feedback loop in which test-time compute scaling works backwards to change train-time strategy
+
+#### The Evolution of the `effort` Parameter
+
+In Claude 4.x, the old `budget_tokens` (where the developer specifies the token count directly) was deprecated and replaced by an **adaptive `effort`** parameter:
+
+| effort level | Behavior | Use case |
+|-------------|----------|----------|
+| `low` | Short reasoning, fast response | Simple lookups, type checks |
+| `medium` | Standard reasoning | General coding |
+| `high` | Deep reasoning, more tokens | Complex refactoring |
+| `max` | Maximum reasoning depth | Architecture design, debugging |
+
+This reflects the trend of test-time compute allocation moving **from developer control to model-autonomous control**. Loop paradigm implication: a strategy of dynamically adjusting effort each iteration is possible — explore quickly with `low` early on, then drill deep with `high` once a promising direction emerges.
 
 ---
 
@@ -212,6 +250,37 @@ This is fundamentally different from fine-tuning:
 - **AGENTS.md**: written to a text file. Reflected immediately, tracked with git, readable by anyone.
 
 "Failure itself is information" — an agent's failed attempt is "deterministically bad," and this information becomes the input for the next loop. If the same task fails 10 or more times in a row, it is judged stuck, and the task is split into smaller units before retrying.
+
+<Aside type="tip" title="AGENTS.md Community Consensus (Early 2026)">
+Practical consensus on writing AGENTS.md has formed in the Ralph loop community:
+
+- **Keep it under 300 lines** — too long and it consumes context window, actually degrading performance
+- **Don't put in CLAUDE.md what a linter can handle** — rules like "don't forget semicolons" belong in ESLint; AGENTS.md should record only the **domain knowledge** linters can't catch
+- **Auto-update mechanism**: harness.sh automatically appends test failure patterns to AGENTS.md
+
+```bash
+# Auto-record failure patterns in harness.sh
+if [ $EXIT_CODE -ne 0 ]; then
+  ERROR_PATTERN=$(tail -5 test_output.log | head -1)
+  echo "- Anti-Pattern: ${ERROR_PATTERN} (loop #${ITERATION})" >> AGENTS.md
+fi
+```
+
+This is the mechanical implementation of "cumulative learning." Rather than a human manually recording each time, the harness extracts patterns from failures and accumulates them automatically.
+</Aside>
+
+#### Fresh Context vs Continuous Session — Huntley's Choice
+
+In January 2026, an interesting "showdown" took place between Huntley and Anthropic. Anthropic proposed a stop-hook plugin for the Ralph loop that used a **continuous session** approach (repeating while maintaining the same context).
+
+| Approach | Method | Advantages | Disadvantages |
+|----------|--------|-----------|---------------|
+| **Original Ralph** | New session every loop | Context Rot completely prevented, deterministic | Loses context from previous attempts |
+| **Anthropic plugin** | Iterate within continuous session | Remembers previous attempts, faster convergence | Context Rot risk, non-deterministic |
+
+Huntley **chose fresh context**. His reasoning: "If you fail 30 times in a continuous session, the context fills up with failure history and useful reasoning becomes impossible. Better to record just the essentials in AGENTS.md and start clean every time."
+
+This trade-off connects directly to Week 5's Context Rot — Ralph's fresh context strategy is the first solution to Context Rot.
 
 #### Claude Code `/loop` — Official Automation Loop
 
@@ -365,6 +434,25 @@ We won't implement RLM directly in class, but understanding the principle is use
 
 Write only a research direction in `program.md`, and the agent autonomously designs and executes specific experiments.
 
+Released on March 7, 2026, it accumulated 21K GitHub stars and 8.6 million views, becoming the symbol of the loop paradigm. The code is characterized by extreme simplicity: **630 lines, 3 files**.
+
+#### Real-World Results — autoresearch by the Numbers
+
+| Metric | Value |
+|--------|-------|
+| Total experiments | **~700** (auto-run overnight) |
+| Optimizations found | **20** |
+| Speed improvement | **11%** |
+| Code size | 630 lines, 3 files |
+
+Shopify CEO Tobi Lütke applied autoresearch to the company's ML pipeline and achieved **19% validation improvement from 37 experiments run in a single night**. What would take a human researcher a week was done by an agent in 8 hours.
+
+These results are captured in what has become known as "The Karpathy Loop":
+
+> **agent + single modifiable file + single metric + fixed time limit = automated research**
+
+The key is **constraint design**. One file, one metric, one time limit — the more you restrict the agent's degrees of freedom, the higher the loop's quality. This is exactly the same principle as Ralph loop's "deterministic verification conditions."
+
 #### Core Design Principles
 
 | Principle | Description | Why It Matters |
@@ -420,6 +508,50 @@ The three essential elements shared by all three loops:
 3. **Sufficient token budget** — the more loops run, the more test-time compute accumulates. The cost is time and tokens.
 
 When these three elements are in place, the loop paradigm can be applied to any domain.
+
+#### Industry Definition of Harness — Guides vs Sensors
+
+In 2026, Martin Fowler / ThoughtWorks classified the harness into two components in their analysis of agentic coding:
+
+| Component | Direction | Role | Examples |
+|-----------|-----------|------|---------|
+| **Guides** | Feedforward | Provide direction **before** the agent acts | PROMPT.md, CLAUDE.md, linter config, type definitions |
+| **Sensors** | Feedback | Measure results **after** the agent acts | Test results, token usage, error logs, val_bpb |
+
+Re-analyzing the three loops through this framework:
+
+- **Ralph Loop**: Guides = PROMPT.md + AGENTS.md, Sensors = compiler + test suite
+- **RLM**: Guides = question prompt, Sensors = answer completeness judgment
+- **autoresearch**: Guides = program.md, Sensors = val_bpb metric
+
+LangChain further distills this as **Agent = Model + Harness**. The model is replaceable; the harness is a collection of domain-specific design decisions.
+
+#### Economics of Loops — When to Stop Iterating
+
+Running loops costs tokens. Infinite iteration is uneconomical. In practice, you need to calculate the **break-even point**.
+
+**Estimated token cost per iteration** (Sonnet 4.6, one code modification):
+
+| Item | Tokens | Cost |
+|------|--------|------|
+| Input (system prompt + code + error log) | ~2,000 | $0.03 |
+| Output (modified code + explanation) | ~4,000 | $0.30 |
+| **Total per iteration** | ~6,000 | **~$0.33** |
+
+| Scenario | Loop cost | Comparison | Verdict |
+|----------|-----------|-----------|---------|
+| 10 iterations to fix a bug | $3.3 | Developer 30 min ($25) | Loop is 7.5× cheaper |
+| 50 iterations for refactoring | $16.5 | Developer 2 hours ($100) | Loop is 6× cheaper |
+| 200 iterations, fails to converge | $66 | Developer 2 hours ($100) | Still cheaper but inefficient |
+
+<Aside type="tip" title="Model Selection Strategy">
+The practical strategy T2 scaling suggests:
+- **Easy tasks** (syntax fixes, formatting): 100 runs with Haiku ($1/$5 per 1M) — total $0.60
+- **Standard tasks** (bug fixes, feature additions): 20 runs with Sonnet — total $6.60
+- **Hard tasks** (architecture changes): 5 runs with Opus — total $4.50
+
+Running a small model many times is often more economical than running a large model a few times.
+</Aside>
 
 #### Connections to Other Weeks
 
@@ -563,6 +695,57 @@ Using an upper layer without the lower one will fail. Running parallel sessions 
 The Ralph loop harness from Part 2 (backpressure + GC + AGENTS.md) ensures **quality for a single loop**. The Boris stack builds on top of it to add **throughput and isolation across loops**. Ralph answers "how do I run one loop well?"; Boris answers "how do I safely run ten loops at once?"
 </Aside>
 
+#### 6.5 Agentmaxxing — Multi-Tool Parallel Execution
+
+Starting in early 2026, an extreme parallelization strategy called "Agentmaxxing" emerged: deploying **multiple AI coding tools simultaneously** in a single repo.
+
+```bash
+# Terminal 1: Claude Code (architecture design)
+claude --worktree arch "Refactor module structure"
+
+# Terminal 2: Codex (test writing)
+codex --approval-mode full-auto "Add missing test cases"
+
+# Terminal 3: Gemini CLI (documentation)
+gemini "Auto-generate API docs from code"
+```
+
+Cursor 2.0 productized this pattern with **Background Agents** (running in isolated VMs) and **Mission Control** (a parallel agent dashboard). Codex CLI recorded 1.6 million weekly active users as of March 2026, establishing itself as the reference implementation for open-source harnesses.
+
+<Aside type="caution" title="Practical Constraints of Agentmaxxing">
+- **Merge conflict explosion**: if N agents modify the same file, conflicts scale as N²
+- **Token cost scales linearly**: running 3 tools simultaneously = 3× the cost
+- **Consistency risk**: if each tool applies a different coding style, the codebase fragments
+- **Solution**: clearly separate each agent's domain (module/file), and unify style via CLAUDE.md/AGENTS.md
+</Aside>
+
+---
+
+### Part 7: Real-World Validation — Building a Product Without Writing a Line of Code
+
+We have covered the theory and techniques. The question now: can loops alone build production software? In March 2026, OpenAI's case of **building an internal product using only the Codex agent** provides the answer.
+
+#### The Codex "Zero Manual Code" Case
+
+The OpenAI engineering team used Codex to build an internal product:
+- **1M+ LOC** generated automatically
+- **0 lines** written manually
+- Humans performed only **requirements definition, architecture review, and PR approval**
+
+The five patterns derived from this process are a field manual for harness engineering:
+
+| Pattern | Principle | Ralph Loop Perspective |
+|---------|-----------|----------------------|
+| **Repo as System of Record** | Code = single source of truth. All decisions reflected in code, not verbal agreements or wikis | PROMPT.md + AGENTS.md serve this role |
+| **Application Legibility** | Write code that agents can read. Clear variable names, types, and comments are prerequisites for correct agent modification | Prerequisite for backpressure — linters and type checkers need readable code to function |
+| **Layered Domain Architecture** | Clearly separate domain layers. Changes to one layer don't propagate to others | Prerequisite for parallel worktrees — modules must be separated for parallel modification |
+| **Minimal Merge Gates** | Minimize merge gates. Auto-merge on test pass | The key to loop speed — approval wait time determines loop efficiency |
+| **Entropy Management** | Actively manage codebase disorder (entropy). Prevent technical debt accumulation via loops | `/simplify` pattern — a separate agent periodically cleans up code quality |
+
+<Aside type="note" title="This Is Not the Future — This Is March 2026 Reality">
+This is not an abstract vision of "AI writing all the code." Production software at the 1M-line scale has already been built using the loop paradigm. The harness engineering we are learning this semester is the **foundational technique** of this reality.
+</Aside>
+
 ---
 
 ### In-Class Discussion Questions
@@ -574,6 +757,8 @@ The Ralph loop harness from Part 2 (backpressure + GC + AGENTS.md) ensures **qua
 5. What are the **limits** of the loop paradigm? What problems can't be solved by iteration?
 6. In Boris's stack, what problems arise if you **use only worktrees without CLAUDE.md**? Conversely, what if you **use only CLAUDE.md without worktrees**? Explain the inter-layer dependency with a concrete scenario.
 7. Do you agree with the claim that `/sandbox`'s purpose is **trust**, not security? Discuss specifically what behavioral changes "isolation increases trust" actually implies.
+8. A model scoring 80.9% on SWE-bench Verified drops to 45.9% on Pro. Can the **35 pp gap be closed by the model alone, without a harness**? If doubling model size doesn't close the gap, what does that tell us?
+9. If Codex **auto-generated 1M lines**, what is the programmer's role? What does "Application Legibility" — one of the five patterns — suggest: is the ability to write code that agents can read becoming the programmer's new core competency?
 
 ---
 
@@ -776,3 +961,6 @@ Build a Ralph harness that includes PROMPT.md and AGENTS.md, run at least 3 loop
 - [OpenAI: Learning to Reason with LLMs](https://openai.com/index/learning-to-reason-with-llms/) — o1 and test-time compute scaling
 - [Anthropic: Claude Code /loop Documentation](https://docs.anthropic.com/en/docs/claude-code/loop) — Claude Code official loop documentation
 - [Snell et al. (2024): Scaling LLM Test-Time Compute](https://arxiv.org/abs/2408.03314) — test-time compute scaling theory paper
+- [T2 Scaling Laws (2026)](https://arxiv.org/abs/2604.01411) — optimal pretraining strategy accounting for inference costs
+- [SWE-bench Pro](https://www.swebench.com/) — coding agent benchmark at realistic difficulty
+- [Martin Fowler: AI Coding Agents](https://martinfowler.com/articles/exploring-gen-ai.html) — Guides vs Sensors framework, harness dimension analysis

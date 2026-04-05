@@ -117,6 +117,9 @@ description: AI 시스템 2026 강의 주요 용어 정의
 **PagedAttention**
 : vLLM의 핵심 기술. OS의 가상 메모리 페이징을 KV 캐시에 적용하여 메모리 낭비를 4% 이하로 줄임.
 
+**Agentmaxxing (에이전트맥싱)**
+: 다중 AI 코딩 도구(Claude Code, Codex CLI, Gemini CLI, Cursor 등)를 한 레포에서 동시에 병렬 실행하는 전략. 2026년 초부터 확산. 담당 영역(모듈/파일)을 명확히 분리하지 않으면 머지 충돌이 N² 규모로 폭발한다.
+
 **AI 코딩 CLI (AI Coding CLI)**
 : 터미널에서 AI 에이전트를 실행하는 명령줄 도구의 총칭. Claude Code, Gemini CLI, Codex CLI, OpenCode 등이 해당. 헤드리스 모드로 Ralph 루프에서 자동화 가능.
 
@@ -149,6 +152,9 @@ description: AI 시스템 2026 강의 주요 용어 정의
 
 **Test-Time Compute Scaling (추론 시점 연산 확장)**
 : 모델 크기를 키우지 않고 추론 시점에 연산을 더 투입하여 성능을 높이는 전략. OpenAI o1이 검증. Ralph Loop, RLM, autoresearch는 모두 이 원리의 구체적 실현으로, 같은 모델을 반복 호출하되 결정론적 검증으로 결과를 필터링한다.
+
+**T2 Scaling Laws (T2 스케일링 법칙)**
+: 추론(inference) 비용을 고려한 최적 사전학습 전략. 기존 Chinchilla(2022)가 학습 연산만 최적화한 것과 달리, T2(arxiv 2604.01411, 2026)는 추론 비용까지 포함하여 최적점을 재계산한다. 결론: 추론 비용을 고려하면 Chinchilla 최적보다 overtrain이 유리 — 작은 모델을 더 오래 학습시키면 추론 시 토큰당 비용이 낮아진다.
 
 **Telemetry (텔레메트리)**
 : 실행 중인 시스템의 성능 지표(메트릭), 로그, 추적(트레이스) 데이터를 실시간으로 수집하는 기술.

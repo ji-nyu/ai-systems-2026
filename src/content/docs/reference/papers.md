@@ -21,6 +21,9 @@ description: AI 시스템 2026 강의 관련 논문, 블로그 포스트, 공식
 | DeepSeek-Coder-V2 | DeepSeek-AI | 2024 | 10주 |
 | Code Llama | Rozière et al. | 2023 | 10주 |
 | SWE-bench | Jimenez et al. | 2024 | 9주 |
+| SWE-bench Pro | OpenAI et al. | 2026 | 4, 9주 |
+| T2 Scaling Laws | — | 2026 | 4주 |
+| Scaling LLM Test-Time Compute | Snell et al. | 2024 | 4주 |
 
 ### 멀티에이전트 시스템
 
@@ -41,6 +44,8 @@ description: AI 시스템 2026 강의 관련 논문, 블로그 포스트, 공식
 
 - **"The Ralph Loop"** — Geoffrey Huntley (2025) → 4–6주 핵심 자료
 - **"Harness Engineering"** — Geoffrey Huntley (2025) → 4주
+- **"Exploring Gen AI: AI Coding Agents"** — Martin Fowler / ThoughtWorks (2026) → 4주. Guides vs Sensors 프레임워크
+- **"autoresearch"** — Andrej Karpathy (2026) → 4주. 700실험, 20최적화, 11% 개선
 - **Claude Code: Deep Dive** — Anthropic Blog (2025) → 1–2주
 
 ## 규제 자료
