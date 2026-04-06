@@ -613,6 +613,9 @@ body {
 }
 
 .diagram__arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   font-size: 1.1rem;
   color: #3B82F6;
   line-height: 1;
@@ -622,8 +625,8 @@ body {
 .diagram__arrow--label {
   font-size: 0.7rem;
   color: #666;
-  display: block;
   text-align: center;
+  margin-top: 0.1rem;
 }
 
 /* Node */
@@ -743,6 +746,74 @@ body {
 .diagram__compare__label {
   font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
   letter-spacing: 0.06em; margin-bottom: 0.5rem; display: block;
+}
+
+/* Stack — flush architecture layers */
+.diagram__stack {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.diagram__stack .diagram__node {
+  max-width: 100%;
+  border-radius: 0;
+  margin-top: -1px;
+}
+.diagram__stack .diagram__node:first-child {
+  border-radius: 0.5rem 0.5rem 0 0;
+  margin-top: 0;
+}
+.diagram__stack .diagram__node:last-child {
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
+/* Loop wrapper */
+.diagram__loop {
+  border: 1.5px dashed rgba(59, 130, 246, 0.3);
+  border-radius: 0.75rem;
+  padding: 1rem 1rem 0.75rem;
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+:root[data-theme='light'] .diagram__loop {
+  border-color: rgba(37, 99, 235, 0.25);
+  background: rgba(37, 99, 235, 0.02);
+}
+.diagram__loop__label {
+  position: absolute;
+  top: -0.6rem;
+  right: 1rem;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.06), rgba(37, 99, 235, 0.02));
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #3B82F6;
+  letter-spacing: 0.04em;
+}
+:root[data-theme='light'] .diagram__loop__label {
+  background: linear-gradient(180deg, #eff6ff, #f8fafc);
+}
+
+/* 3-way branch */
+.diagram__branch--3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  width: 100%;
+  max-width: 30rem;
+}
+@media (max-width: 600px) {
+  .diagram__branch--3 { grid-template-columns: 1fr; }
+}
+.diagram__branch--3 > div {
+  display: flex; flex-direction: column; align-items: center; gap: 0.15rem;
+  padding: 0.625rem 0.75rem; border-radius: 0.5rem;
+  font-size: 0.8rem; font-weight: 600; border: 1px solid transparent;
+  text-align: center;
 }
 
 /* ─── Harness Diagram ────────────────────────────────────────────────────── */

@@ -27,23 +27,39 @@ Claude Code는 **듀얼 레이어** 구조다:
 - **오케스트레이션 레이어**: 세션 관리, 커맨드 라우팅, LLM 상호작용 (60+ 모듈)
 - **실행 레이어**: API 통신, 도구 실행, 터미널 렌더링, 보안 (다중 크레이트 워크스페이스)
 
-```
-┌─────────────────────────────────────────┐
-│  CLI / REPL                             │  사용자 인터페이스
-├─────────────────────────────────────────┤
-│  Commands Dispatcher (15+ 슬래시 커맨드)  │  /help, /status, /compact, /cost ...
-├─────────────────────────────────────────┤
-│  Query Engine                           │  대화 루프, 턴 관리, 예산 제어
-├─────────────────────────────────────────┤
-│  Tool Registry (40개 도구)               │  Base + Plugin + Runtime(MCP)
-├─────────────────────────────────────────┤
-│  Permission Enforcer                    │  3모드 × 4레이어 인가 게이트
-├─────────────────────────────────────────┤
-│  Bash / File I/O / MCP / LSP / Sandbox  │  실제 시스템 조작
-├─────────────────────────────────────────┤
-│  OS / 파일시스템 / 네트워크              │  하드웨어 경계
-└─────────────────────────────────────────┘
-```
+<div class="diagram">
+  <div class="diagram__title">SYSTEM ARCHITECTURE</div>
+  <div class="diagram__stack">
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">CLI / REPL</span>
+      <span class="diagram__node__sub">사용자 인터페이스</span>
+    </div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Commands Dispatcher</span>
+      <span class="diagram__node__sub">15+ 슬래시 커맨드 — /help, /status, /compact, /cost ...</span>
+    </div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Query Engine</span>
+      <span class="diagram__node__sub">대화 루프, 턴 관리, 예산 제어</span>
+    </div>
+    <div class="diagram__node diagram__node--purple">
+      <span class="diagram__node__label">Tool Registry (40개 도구)</span>
+      <span class="diagram__node__sub">Base + Plugin + Runtime(MCP)</span>
+    </div>
+    <div class="diagram__node diagram__node--orange">
+      <span class="diagram__node__label">Permission Enforcer</span>
+      <span class="diagram__node__sub">3모드 × 4레이어 인가 게이트</span>
+    </div>
+    <div class="diagram__node diagram__node--green">
+      <span class="diagram__node__label">Bash / File I/O / MCP / LSP / Sandbox</span>
+      <span class="diagram__node__sub">실제 시스템 조작</span>
+    </div>
+    <div class="diagram__node diagram__node--gray">
+      <span class="diagram__node__label">OS / 파일시스템 / 네트워크</span>
+      <span class="diagram__node__sub">하드웨어 경계</span>
+    </div>
+  </div>
+</div>
 
 <Aside type="note" title="설계 철학">
 오케스트레이션 레이어는 **빠른 실험**에 최적화 — 세션 관리, 프롬프트 조립, 도구 라우팅을 유연하게 변경.
@@ -102,25 +118,48 @@ Claude Code 세션은 "터미널을 열면 바로 시작"이 아니다. 7단계 
 
 ### 턴 루프 흐름
 
-```
-사용자 입력
-  ↓
-시스템 프롬프트 조립 (CLAUDE.md + 도구 목록 + 세션 상태)
-  ↓
-세션 히스토리에 메시지 추가
-  ↓
-┌─────────── 턴 루프 (max 16) ──────────┐
-│  API 스트리밍 호출 (SSE)                │
-│    ↓                                   │
-│  응답 파싱 — 도구 호출 감지?            │
-│    ├─ Yes → 퍼미션 확인 → 도구 실행     │
-│    │         → 결과를 세션에 추가        │
-│    │         → 다음 턴으로              │
-│    └─ No  → 텍스트 응답 → 루프 종료     │
-└────────────────────────────────────────┘
-  ↓
-최종 렌더링 + 토큰 사용량 기록
-```
+<div class="diagram">
+  <div class="diagram__title">QUERY ENGINE TURN LOOP</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">사용자 입력</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue diagram__node--wide">
+      <span class="diagram__node__label">시스템 프롬프트 조립</span>
+      <span class="diagram__node__sub">CLAUDE.md + 도구 목록 + 세션 상태</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">세션 히스토리에 메시지 추가</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__loop">
+      <span class="diagram__loop__label">턴 루프 (max 16)</span>
+      <div class="diagram__node diagram__node--purple diagram__node--wide">
+        <span class="diagram__node__label">API 스트리밍 호출 (SSE)</span>
+      </div>
+      <div class="diagram__arrow">&#x2193;</div>
+      <div class="diagram__node diagram__node--purple diagram__node--wide">
+        <span class="diagram__node__label">응답 파싱 — 도구 호출 감지?</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;width:100%;max-width:28rem;margin-top:0.35rem;">
+        <div class="diagram__node diagram__node--green" style="max-width:100%;">
+          <span class="diagram__node__label">Yes</span>
+          <span class="diagram__node__sub">퍼미션 확인 → 도구 실행 → 결과를 세션에 추가 → 다음 턴</span>
+        </div>
+        <div class="diagram__node diagram__node--red" style="max-width:100%;">
+          <span class="diagram__node__label">No</span>
+          <span class="diagram__node__sub">텍스트 응답 → 루프 종료</span>
+        </div>
+      </div>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--orange diagram__node--wide">
+      <span class="diagram__node__label">최종 렌더링 + 토큰 사용량 기록</span>
+    </div>
+  </div>
+</div>
 
 ### TurnResult — 턴 결과 캡처
 
@@ -212,16 +251,28 @@ Claude Code가 실제로 "행동"할 수 있는 이유. 도구 없는 LLM은 텍
 
 도구는 세 겹으로 합성된다:
 
-```
-Layer 1: Base (컴파일 타임 정적 정의)
-   └─ 40개 빌트인 도구. ToolSpec(이름, 설명, JSON schema, 필요 퍼미션)
-        ↓ 이름 충돌 검사
-Layer 2: Plugin (사용자 설치 확장)
-   └─ hook 기반 lifecycle: pre_tool_use → 실행 → post_tool_use / post_tool_use_failure
-        ↓ 이름 충돌 검사
-Layer 3: Runtime (MCP 서버 동적 등록)
-   └─ mcp__{server}__{tool} 네이밍. 서버 연결 시 자동 등록
-```
+<div class="diagram">
+  <div class="diagram__title">TOOL 3-LAYER COMPOSITION</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--blue diagram__node--wide">
+      <span class="diagram__node__label">Layer 1: Base</span>
+      <span class="diagram__node__sub">컴파일 타임 정적 정의</span>
+      <span class="diagram__node__detail">40개 빌트인 도구 — ToolSpec(이름, 설명, JSON schema, 필요 퍼미션)</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">이름 충돌 검사</span></div>
+    <div class="diagram__node diagram__node--purple diagram__node--wide">
+      <span class="diagram__node__label">Layer 2: Plugin</span>
+      <span class="diagram__node__sub">사용자 설치 확장</span>
+      <span class="diagram__node__detail">hook 기반 lifecycle: pre_tool_use → 실행 → post_tool_use / post_tool_use_failure</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">이름 충돌 검사</span></div>
+    <div class="diagram__node diagram__node--cyan diagram__node--wide">
+      <span class="diagram__node__label">Layer 3: Runtime</span>
+      <span class="diagram__node__sub">MCP 서버 동적 등록</span>
+      <span class="diagram__node__detail">mcp__&#123;server&#125;__&#123;tool&#125; 네이밍 — 서버 연결 시 자동 등록</span>
+    </div>
+  </div>
+</div>
 
 **핵심 설계 결정**:
 - 상위 레이어 도구가 하위와 **이름 충돌 시 등록 거부** — 빌트인 도구의 안정성 보장
@@ -264,14 +315,34 @@ Layer 3: Runtime (MCP 서버 동적 등록)
 
 ### 인가 흐름
 
-```
-authorize(tool_name, input)
-  ↓
-모드 조회 (tool → required_mode)
-  ├─ Allow  → 즉시 통과
-  ├─ Deny   → 사유(tool, active_mode, required_mode, reason) 반환
-  └─ Prompt → 사용자에게 승인 요청 → Allow/Deny 결정
-```
+<div class="diagram">
+  <div class="diagram__title">AUTHORIZATION FLOW</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--blue diagram__node--wide">
+      <span class="diagram__node__label">authorize(tool_name, input)</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--purple diagram__node--wide">
+      <span class="diagram__node__label">모드 조회</span>
+      <span class="diagram__node__sub">tool → required_mode</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__branch--3">
+      <div class="diagram__node--green" style="padding:0.75rem;border-radius:0.5rem;border:1px solid rgba(34,197,94,0.25);">
+        <span class="diagram__node__label" style="color:#22C55E;">Allow</span>
+        <span class="diagram__node__sub">즉시 통과</span>
+      </div>
+      <div class="diagram__node--red" style="padding:0.75rem;border-radius:0.5rem;border:1px solid rgba(239,68,68,0.25);">
+        <span class="diagram__node__label" style="color:#EF4444;">Deny</span>
+        <span class="diagram__node__sub">사유 반환 (tool, active_mode, required_mode, reason)</span>
+      </div>
+      <div class="diagram__node--orange" style="padding:0.75rem;border-radius:0.5rem;border:1px solid rgba(249,115,22,0.25);">
+        <span class="diagram__node__label" style="color:#F97316;">Prompt</span>
+        <span class="diagram__node__sub">사용자에게 승인 요청 → Allow/Deny 결정</span>
+      </div>
+    </div>
+  </div>
+</div>
 
 ### Bash 특별 처리
 
@@ -314,19 +385,35 @@ authorize(tool_name, input)
 
 대화가 길어지면 자동으로 압축한다:
 
-```
-트리거: 턴 수 > compact_after_turns (기본 12)
-  ↓
-보존: 최근 4개 메시지 유지
-  ↓
-압축 대상 (나머지):
-  1. Markdown → plaintext 변환
-  2. 중복 도구 결과 제거 (같은 파일 여러 번 읽은 경우)
-  3. 타임스탬프/메타데이터 제거
-  4. 토큰 상한 10,000까지 절삭
-  ↓
-결과: 요약 프롬프트 + 최근 4개 메시지로 재구성
-```
+<div class="diagram">
+  <div class="diagram__title">AUTO-COMPACTION ALGORITHM</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--red diagram__node--wide">
+      <span class="diagram__node__label">트리거</span>
+      <span class="diagram__node__sub">턴 수 &gt; compact_after_turns (기본 12)</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--green diagram__node--wide">
+      <span class="diagram__node__label">보존</span>
+      <span class="diagram__node__sub">최근 4개 메시지 유지</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--purple diagram__node--wide">
+      <span class="diagram__node__label">압축 대상 (나머지)</span>
+      <ul>
+        <li>Markdown → plaintext 변환</li>
+        <li>중복 도구 결과 제거</li>
+        <li>타임스탬프/메타데이터 제거</li>
+        <li>토큰 상한 10,000까지 절삭</li>
+      </ul>
+    </div>
+    <div class="diagram__arrow">&#x2193;</div>
+    <div class="diagram__node diagram__node--cyan diagram__node--wide">
+      <span class="diagram__node__label">결과</span>
+      <span class="diagram__node__sub">요약 프롬프트 + 최근 4개 메시지로 재구성</span>
+    </div>
+  </div>
+</div>
 
 수동 트리거: `/compact` 명령
 
@@ -377,18 +464,30 @@ authorize(tool_name, input)
 
 ### 서버 Lifecycle 상태머신
 
-```
-Configured
-  ↓ spawn process (Stdio) 또는 connect (HTTP/WS)
-Initializing
-  ↓ JSON-RPC initialize 핸드셰이크 (프로토콜 버전 협상)
-Connected
-  ↓ tools/list + resources/list (도구/리소스 발견)
-In Use
-  ↓ tools/call, resources/read (실제 사용)
-Terminated
-  ↓ shutdown signal 또는 오류
-```
+<div class="diagram">
+  <div class="diagram__title">MCP SERVER LIFECYCLE</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--gray">
+      <span class="diagram__node__label">Configured</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">spawn process (Stdio) 또는 connect (HTTP/WS)</span></div>
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">Initializing</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">JSON-RPC initialize 핸드셰이크 (프로토콜 버전 협상)</span></div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">Connected</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">tools/list + resources/list (도구/리소스 발견)</span></div>
+    <div class="diagram__node diagram__node--green">
+      <span class="diagram__node__label">In Use</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">shutdown signal 또는 오류</span></div>
+    <div class="diagram__node diagram__node--red">
+      <span class="diagram__node__label">Terminated</span>
+    </div>
+  </div>
+</div>
 
 ### JSON-RPC 2.0 프로토콜
 
@@ -426,13 +525,25 @@ claude.ai 호스팅 서버는 `"claude.ai "` 접두사 사용: `mcp__claude_ai_G
 
 ### 설정 3-소스 계층
 
-```
-~/.claude/settings.json          (사용자 전역)
-  ↓ deep merge
-<project>/.claude/settings.json  (프로젝트)
-  ↓ deep merge
-.claude/settings.local.json      (로컬, gitignore)
-```
+<div class="diagram">
+  <div class="diagram__title">SETTINGS 3-SOURCE HIERARCHY</div>
+  <div class="diagram__flow">
+    <div class="diagram__node diagram__node--blue">
+      <span class="diagram__node__label">~/.claude/settings.json</span>
+      <span class="diagram__node__sub">사용자 전역</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">deep merge</span></div>
+    <div class="diagram__node diagram__node--purple">
+      <span class="diagram__node__label">&lt;project&gt;/.claude/settings.json</span>
+      <span class="diagram__node__sub">프로젝트</span>
+    </div>
+    <div class="diagram__arrow">&#x2193;<span class="diagram__arrow--label">deep merge</span></div>
+    <div class="diagram__node diagram__node--cyan">
+      <span class="diagram__node__label">.claude/settings.local.json</span>
+      <span class="diagram__node__sub">로컬 (gitignore)</span>
+    </div>
+  </div>
+</div>
 
 - 가장 구체적인 설정이 우선
 - **FNV-1a 해싱**으로 중복 서버 감지 — 같은 서버가 여러 레벨에 정의되어도 1회만 연결
