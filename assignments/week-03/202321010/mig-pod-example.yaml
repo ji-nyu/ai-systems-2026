@@ -1,0 +1,340 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-student-workload
+  labels:
+    app: gpu-monitor
+    user-role: student
+    permission-level: viewer
+spec:
+  restartPolicy: OnFailure
+  
+  # NodeAffinity를 사용하여 GPU가 있는 노드 선택
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          # NVIDIA GPU가 있는 노드 선택
+          - key: nvidia.com/gpu.present
+            operator: In
+            values:
+            - "true"
+          # MIG 모드가 비활성화된 노드 (전체 GPU 사용)
+          - key: nvidia.com/mig.strategy
+            operator: In
+            values:
+            - "single"
+            - "none"
+  
+  containers:
+  - name: student-container
+    image: nvidia/cuda:12.0-base-ubuntu22.04
+    command: ["sh", "-c"]
+    args:
+    - |
+      echo "Student GPU Workload Started"
+      echo "User: student (viewer permission)"
+      echo "Querying GPU information via MCP..."
+      nvidia-smi
+      sleep infinity
+    
+    resources:
+      limits:
+        nvidia.com/gpu: 1  # 전체 GPU 1개 요청
+      requests:
+        nvidia.com/gpu: 1
+    
+    env:
+    - name: USER_ID
+      value: "student"
+    - name: PERMISSION_LEVEL
+      value: "viewer"
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-researcher-mig-workload
+  labels:
+    app: gpu-monitor
+    user-role: researcher
+    permission-level: power-user
+    mig-profile: 3g.20gb
+spec:
+  restartPolicy: OnFailure
+  
+  # NodeAffinity를 사용하여 특정 MIG 프로파일이 있는 노드 선택
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          # MIG 모드가 활성화된 노드만 선택
+          - key: nvidia.com/mig.strategy
+            operator: In
+            values:
+            - "mixed"
+          # 특정 MIG 프로파일이 있는 노드 (과제 요구: 특정 값 지정)
+          - key: nvidia.com/mig.profile
+            operator: In
+            values:
+            - "3g.20gb"
+      
+      # 선호 조건: GPU 메모리가 많은 노드 우선
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: nvidia.com/gpu.memory
+            operator: Gt
+            values:
+            - "20000"
+  
+  containers:
+  - name: researcher-container
+    image: nvidia/cuda:12.0-runtime-ubuntu22.04
+    command: ["bash", "-c"]
+    args:
+    - |
+      echo "Researcher MIG Workload Started"
+      echo "User: researcher (power_user permission)"
+      echo "MIG Profile: 3g.20gb"
+      echo "Querying MIG devices via MCP get_mig_devices..."
+      nvidia-smi -L
+      nvidia-smi mig -lgi
+      sleep infinity
+    
+    resources:
+      limits:
+        nvidia.com/mig-3g.20gb: 1  # MIG 프로파일 3g.20gb 1개 요청
+      requests:
+        nvidia.com/mig-3g.20gb: 1
+    
+    env:
+    - name: USER_ID
+      value: "researcher"
+    - name: PERMISSION_LEVEL
+      value: "power_user"
+    - name: GPU_INDEX
+      value: "0"
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-professor-high-perf-mig
+  labels:
+    app: gpu-monitor
+    user-role: professor
+    permission-level: admin
+    mig-profile: 7g.40gb
+spec:
+  restartPolicy: OnFailure
+  
+  # NodeAffinity로 고성능 MIG 프로파일 노드 선택
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          # A100 또는 H100 GPU가 있는 노드
+          - key: nvidia.com/gpu.product
+            operator: In
+            values:
+            - "NVIDIA-A100-SXM4-40GB"
+            - "NVIDIA-H100-80GB-HBM3"
+          # MIG 7g.40gb 프로파일 사용 가능 (특정 값 명시)
+          - key: nvidia.com/mig.profile
+            operator: In
+            values:
+            - "7g.40gb"
+          # MIG 전략이 mixed
+          - key: nvidia.com/mig.strategy
+            operator: In
+            values:
+            - "mixed"
+      
+      # 선호 조건
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+          - key: node.kubernetes.io/instance-type
+            operator: In
+            values:
+            - "p4d.24xlarge"  # AWS A100 인스턴스
+            - "p5.48xlarge"   # AWS H100 인스턴스
+  
+  containers:
+  - name: professor-container
+    image: nvidia/cuda:12.0-devel-ubuntu22.04
+    command: ["bash", "-c"]
+    args:
+    - |
+      echo "Professor High-Performance Workload Started"
+      echo "User: professor (admin permission)"
+      echo "MIG Profile: 7g.40gb (High Performance)"
+      echo "Admin access to all GPU monitoring features"
+      nvidia-smi
+      nvidia-smi mig -lgi
+      nvidia-smi mig -lgip
+      echo "Running intensive GPU workload..."
+      sleep infinity
+    
+    resources:
+      limits:
+        nvidia.com/mig-7g.40gb: 1  # 고성능 MIG 프로파일
+        memory: "64Gi"
+        cpu: "8"
+      requests:
+        nvidia.com/mig-7g.40gb: 1
+        memory: "32Gi"
+        cpu: "4"
+    
+    env:
+    - name: USER_ID
+      value: "professor"
+    - name: PERMISSION_LEVEL
+      value: "admin"
+    - name: GPU_INDEX
+      value: "0"
+    - name: CUDA_VISIBLE_DEVICES
+      value: "0"
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-multi-mig-workload
+  labels:
+    app: gpu-monitor
+    user-role: researcher
+    permission-level: power-user
+    mig-profile: 1g.5gb
+spec:
+  restartPolicy: OnFailure
+  
+  # NodeAffinity로 작은 MIG 프로파일 노드 선택
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          # MIG 1g.5gb 프로파일 사용 가능 (특정 프로파일 지정)
+          - key: nvidia.com/mig.profile
+            operator: In
+            values:
+            - "1g.5gb"
+          # MIG 전략
+          - key: nvidia.com/mig.strategy
+            operator: In
+            values:
+            - "mixed"
+      
+      # 가용성 높은 노드 우선
+      preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 50
+        preference:
+          matchExpressions:
+          - key: nvidia.com/mig.available.1g.5gb
+            operator: Gt
+            values:
+            - "2"  # 2개 이상의 1g.5gb 인스턴스 가용
+  
+  containers:
+  - name: light-workload-container
+    image: nvidia/cuda:12.0-base-ubuntu22.04
+    command: ["sh", "-c"]
+    args:
+    - |
+      echo "Light GPU Workload - MIG 1g.5gb"
+      echo "User: researcher"
+      echo "Efficient resource sharing via MIG"
+      nvidia-smi
+      sleep infinity
+    
+    resources:
+      limits:
+        nvidia.com/mig-1g.5gb: 1  # 작은 MIG 인스턴스
+      requests:
+        nvidia.com/mig-1g.5gb: 1
+    
+    env:
+    - name: USER_ID
+      value: "researcher"
+    - name: MIG_PROFILE
+      value: "1g.5gb"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-gpu-monitor-config
+data:
+  # 사용자 역할 매핑 (mcp_gpu_server.py의 USER_ROLES와 동일)
+  user-roles.json: |
+    {
+      "student": "viewer",
+      "professor": "admin",
+      "researcher": "power_user"
+    }
+  
+  # MIG 프로파일 매핑
+  mig-profiles.json: |
+    {
+      "1g.5gb": {
+        "compute_slices": 1,
+        "memory_gb": 5,
+        "use_cases": ["light workloads", "inference", "development"]
+      },
+      "2g.10gb": {
+        "compute_slices": 2,
+        "memory_gb": 10,
+        "use_cases": ["medium workloads", "small training"]
+      },
+      "3g.20gb": {
+        "compute_slices": 3,
+        "memory_gb": 20,
+        "use_cases": ["research", "medium training", "multi-model inference"]
+      },
+      "7g.40gb": {
+        "compute_slices": 7,
+        "memory_gb": 40,
+        "use_cases": ["large training", "high-performance computing"]
+      }
+    }
+  
+  # MCP 서버 연결 설정
+  mcp-server-config.json: |
+    {
+      "server": {
+        "name": "GPU Monitor Server",
+        "tools": [
+          "list_gpus",
+          "get_gpu_info",
+          "get_mig_devices"
+        ],
+        "permissions": {
+          "viewer": ["list_gpus", "get_gpu_info"],
+          "power_user": ["list_gpus", "get_gpu_info", "get_mig_devices"],
+          "admin": ["list_gpus", "get_gpu_info", "get_mig_devices"]
+        }
+      }
+    }
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gpu-monitor-sa
+  labels:
+    app: gpu-monitor
+
+---
