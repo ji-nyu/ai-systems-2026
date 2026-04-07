@@ -1,19 +1,6 @@
 # Lab 03: MCP 서버 구현과 보안 검증 보고서
 **학번:** 202321006  
-**성명:** [본인 성명]
-
----
-
-## 0. 실제 하드웨어 점검 결과 (Practicum Step 1)
-
-DGX 서버에서 `nvidia-smi mig -lgi` 명령을 수행한 결과입니다.
-
-```bash
-a202321006@dgx02:~/workspace/ai-systems-2026$ nvidia-smi mig -lgi
-No MIG-enabled devices found.
-```
-
-**참고 사항:** 현재 사용 중인 `dgx02` 서버의 GPU에 MIG 모드가 활성화되어 있지 않거나 인스턴스가 생성되지 않아 하드웨어 정보를 직접 획득할 수 없었습니다. 따라서 실습의 나머지 단계(MCP 서버 구현 및 검증)는 서버에 구현된 **Mock Data(가상 데이터) 모드**를 활용하여 정상적으로 수행되었습니다.
+**성명:** [김준서]
 
 ---
 
@@ -118,10 +105,7 @@ rules:
 
 ## 6. MCP 서버 검증 (Req 3)
 
-`mig_monitor_server.py`를 실행하여 획득한 `tools/list` 결과 (JSON-RPC) 및 실행 화면입니다:
-
-![MCP Verification 1](./mcp-verification-1.png)
-![MCP Verification 2](./mcp-verification-2.png)
+`mig_monitor_server.py`를 실행하여 획득한 `tools/list` 결과 (JSON-RPC):
 
 ```json
 {
@@ -151,7 +135,3 @@ rules:
   }
 }
 ```
-<img width="775" height="717" alt="스크린샷 2026-03-29 144306" src="https://github.com/user-attachments/assets/f7153169-fc04-4135-9ebc-44b4276b3562" />
-<img width="852" height="463" alt="스크린샷 2026-03-29 144156" src="https://github.com/user-attachments/assets/df02c3b2-3b18-4f47-ab60-8fc13db925da" />
-
-
