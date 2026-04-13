@@ -2,10 +2,45 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+// 빌드 시점에 현재 주차/Phase 자동 계산 — 해당 Phase 사이드바가 펼쳐짐
+const SEMESTER_START = new Date('2026-03-03'); // 1주차 시작일
+const now = new Date();
+const weekNum = Math.max(1, Math.min(16,
+  Math.floor((now - SEMESTER_START) / (7 * 24 * 60 * 60 * 1000)) + 1
+));
+const activePhase = weekNum <= 3 ? 1 : weekNum <= 6 ? 2 : weekNum <= 9 ? 3 : weekNum <= 12 ? 4 : 5;
+
 export default defineConfig({
   site: 'https://ai-systems-2026.halla.ai',
   integrations: [
     starlight({
+      head: [
+        {
+          // 주차 페이지 진입 시 해당 Phase ± 1 사이드바 메뉴 동적 펼침
+          tag: 'script',
+          content: `
+            document.addEventListener('DOMContentLoaded',function(){
+              var m=location.pathname.match(/\\/(?:en\\/)?weeks\\/week-(\\d+)/);
+              if(!m)return;
+              var w=parseInt(m[1],10);
+              var p=w<=3?1:w<=6?2:w<=9?3:w<=12?4:5;
+              var details=document.querySelectorAll('.sidebar-content details');
+              details.forEach(function(d){
+                var lbl=d.querySelector('.group-label .large');
+                if(!lbl)return;
+                var t=lbl.textContent;
+                for(var i=1;i<=5;i++){
+                  if(t.indexOf('Phase '+i)!==-1){
+                    if(Math.abs(i-p)<=1)d.setAttribute('open','');
+                    else d.removeAttribute('open');
+                    break;
+                  }
+                }
+              });
+            });
+          `,
+        },
+      ],
       title: {
         ko: 'AI 시스템 2026',
         en: 'AI Systems 2026',
@@ -49,7 +84,7 @@ export default defineConfig({
         {
           label: 'Phase 1: 에이전틱 시스템 기초',
           translations: { en: 'Phase 1: Agentic System Foundations' },
-          collapsed: false,
+          collapsed: Math.abs(1 - activePhase) > 1,
           items: [
             { label: '1주차: AI 시스템 패러다임 전환', translations: { en: 'Week 1: AI Systems Paradigm Shift' }, link: '/weeks/week-01' },
             { label: '2주차: HOTL 거버넌스와 Governance-as-Code', translations: { en: 'Week 2: HOTL Governance & Governance-as-Code' }, link: '/weeks/week-02' },
@@ -59,7 +94,7 @@ export default defineConfig({
         {
           label: 'Phase 2: 하네스 엔지니어링',
           translations: { en: 'Phase 2: Harness Engineering' },
-          collapsed: false,
+          collapsed: Math.abs(2 - activePhase) > 1,
           items: [
             { label: '4주차: 루프 패러다임 — 반복이 복잡성을 이긴다', translations: { en: 'Week 4: Loop Paradigm — Iteration Beats Complexity' }, link: '/weeks/week-04' },
             { label: '5주차: 컨텍스트 관리와 Context Rot 방지', translations: { en: 'Week 5: Context Management & Preventing Context Rot' }, link: '/weeks/week-05' },
@@ -69,7 +104,7 @@ export default defineConfig({
         {
           label: 'Phase 3: 멀티에이전트 SDLC',
           translations: { en: 'Phase 3: Multi-Agent SDLC' },
-          collapsed: true,
+          collapsed: Math.abs(3 - activePhase) > 1,
           items: [
             { label: '7주차: 멀티에이전트 SDLC 설계', translations: { en: 'Week 7: Multi-Agent SDLC Design' }, link: '/weeks/week-07' },
             { label: '8주차: 플래닝 에이전트', translations: { en: 'Week 8: Planning Agent' }, link: '/weeks/week-08' },
@@ -79,7 +114,7 @@ export default defineConfig({
         {
           label: 'Phase 4: 오픈소스 모델 & MLOps',
           translations: { en: 'Phase 4: Open-Source Models & MLOps' },
-          collapsed: true,
+          collapsed: Math.abs(4 - activePhase) > 1,
           items: [
             { label: '10주차: 오픈소스 코딩 LLM과 로컬 배포', translations: { en: 'Week 10: Open-Source Coding LLMs & Local Deployment' }, link: '/weeks/week-10' },
             { label: '11주차: vLLM 고처리량 추론 최적화', translations: { en: 'Week 11: vLLM High-Throughput Inference Optimization' }, link: '/weeks/week-11' },
@@ -89,7 +124,7 @@ export default defineConfig({
         {
           label: 'Phase 5: 캡스톤 Ralphthon',
           translations: { en: 'Phase 5: Capstone Ralphthon' },
-          collapsed: true,
+          collapsed: Math.abs(5 - activePhase) > 1,
           items: [
             { label: '13주차: 캡스톤 프로젝트 설계', translations: { en: 'Week 13: Capstone Project Design' }, link: '/weeks/week-13' },
             { label: '14주차: Ralphthon 실행', translations: { en: 'Week 14: Ralphthon Execution' }, link: '/weeks/week-14' },
@@ -139,6 +174,7 @@ export default defineConfig({
             { label: '논문 & 자료', translations: { en: 'Papers & Resources' }, link: '/reference/papers' },
             { label: '용어집', translations: { en: 'Glossary' }, link: '/reference/glossary' },
             { label: '인프라 가이드', translations: { en: 'Infrastructure Guide' }, link: '/reference/infrastructure' },
+            { label: 'Claude Code 내부 구조', translations: { en: 'Claude Code Internals' }, link: '/reference/claude-code-internals' },
           ],
         },
         {

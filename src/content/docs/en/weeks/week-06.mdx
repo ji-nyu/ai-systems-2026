@@ -18,15 +18,28 @@ difficulty: intermediate
 estimated_time: "4 hours"
 ---
 
-import { Aside, Steps, Badge } from '@astrojs/starlight/components';
+import { Aside, Steps, Badge, Tabs, TabItem, Card, CardGrid } from '@astrojs/starlight/components';
 
 <div class="week-meta">
   <span class="phase-tag">Phase 2</span>
   <Badge text="Week 6" variant="note" />
   <Badge text="Intermediate" variant="danger" />
+  <Badge text="Lecture: 2026-04-07" variant="default" />
 </div>
 
 ## Theory
+
+### Why Instruction Tuning is Central in Week 6
+
+In Week 5 we learned how to keep context clean — auto-compaction, fresh context, state files. But even with clean context, **if the agent keeps making the same mistakes**, it's all for nothing.
+
+The core question this week: **Can we correct agent behavior without changing model weights?**
+
+The answer is "instruction tuning" — correcting behavior by **changing the environment (the instruction file)** rather than the model. If Week 4's Ralph loop AGENTS.md (cumulative learning) was passive record-keeping, this week's PROMPT.md/CLAUDE.md tuning is **active constraint design**.
+
+When we move to Week 7 (multi-agent), each agent will need its own PROMPT.md and permissions. Before that, we master the techniques for precisely controlling a single agent's behavior.
+
+---
 
 ### What is Instruction Tuning?
 
@@ -34,6 +47,8 @@ When an agent makes recurring mistakes in the Ralph Loop, we correct its behavio
 
 <Aside type="note" title='Huntley&apos;s "Sign" Metaphor'>
 Think of it like placing a "Do Not Climb" warning sign next to a children's playground slide. Instead of redesigning the slide itself (the model), you add clear instructions (a Sign) to the environment.
+
+**Sign Fatigue**: Too many signs produce the opposite effect. If a playground has 30 warning signs, neither children nor adults read any of them. PROMPT.md works the same way — too many constraints cause the agent to miss the critical instructions. That is why you must **periodically clean up the signs (tune)**. This is the real meaning of "instruction tuning" — it includes not just adding, but also **pruning and reprioritizing**.
 </Aside>
 
 ### The Instruction Tuning Process
@@ -63,6 +78,23 @@ Think of it like placing a "Do Not Climb" warning sign next to a children's play
   </div>
 </div>
 
+<Aside type="tip" title="Inside Claude Code...">
+The principles of instruction tuning are implemented directly in Claude Code's **Permission Model + tool filtering + instruction hierarchy**:
+
+- **CLAUDE.md 5-level hierarchy** (expanded in 2026):
+  1. `~/.claude/CLAUDE.md` — user global (common to all projects)
+  2. `./CLAUDE.md` — project root (git-shared, team-wide)
+  3. `./CLAUDE.local.md` — personal settings (gitignored)
+  4. Parent directory CLAUDE.md — inherits upper-level rules in monorepos
+  5. Child directory CLAUDE.md — on-demand loading, only when working in that directory
+- **@import syntax**: Reference external files with `@path/to/file`. Examples: `@README.md`, `@docs/api-conventions.md`
+- **Advisory vs Deterministic**: CLAUDE.md is **advisory** (~80% compliance). For 100% enforcement, use **Hooks**
+
+**Hiding** a tool (the LLM doesn't know it exists) vs. **blocking execution** (it knows but is blocked) are different security layers — defense-in-depth.
+
+→ Details: [Reference > Claude Code Internals](/en/reference/claude-code-internals)
+</Aside>
+
 ### Example of an Advanced PROMPT.md
 
 ```markdown
@@ -89,6 +121,65 @@ Think of it like placing a "Do Not Climb" warning sign next to a children's play
 ...
 ```
 
+### Instruction File Design Principles — Lessons from 2,500 Repositories
+
+GitHub Blog's analysis of 2,500 open-source repositories (2026) and ETH Zurich's AGENTbench research empirically identified the **success factors and anti-patterns** of instruction files.
+
+#### 5 Elements of Successful Instruction Files
+
+1. **Executable commands first** — Place specific commands with flags (e.g., `pnpm test --coverage`) at the top of the file
+2. **Code examples over prose** — `def add(a: int, b: int) -> int:` is more effective than "write in a type-safe manner"
+3. **Clear boundaries** — Explicitly state which files/directories must never be touched
+4. **Specific stack versions** — Not "use Python" but "Python 3.12, FastAPI 0.115, Pydantic v2"
+5. **Cover 6 key areas** — Build commands, tests, project structure, coding style, git workflow, prohibited actions
+
+#### 3-Tier Boundary System
+
+| Tier | Meaning | Examples |
+|------|---------|---------|
+| **Always Do** | Execute every time without fail | "Run `pytest` before committing", "Type hints mandatory" |
+| **Ask First** | Request confirmation before executing | "Confirm with a human before DB schema changes", "Confirm before modifying external API keys" |
+| **Never Do** | Absolutely prohibited | "Never commit `.env` files", "Never push directly to `main`" |
+
+<Aside type="danger" title="ETH Zurich Research: LLM-generated instruction files are harmful">
+Key findings from ETH Zurich AGENTbench research (2026):
+
+- **LLM auto-generated AGENTS.md**: success rate **~3% decrease**, cost **20%+ increase**
+- **Human-written AGENTS.md**: success rate **~4% increase**, cost ~19% increase
+
+Why? LLM-generated files list **general information** like "architecture overview" or "repository structure," and agents waste effort on **unnecessary exploration** trying to follow it. Human-written files contain only "information that cannot be inferred by reasoning alone" (non-standard build commands, hidden constraints, domain rules) — which is why they're effective.
+
+**Principle**: Do not auto-generate instruction files with `claude` or `codex`. Always have a human write them directly, including only "information the agent would get wrong without it."
+</Aside>
+
+### The CLAUDE.md 200-Line Rule
+
+CLAUDE.md is injected into the system prompt every session and every turn. Therefore there is a **token budget**:
+
+- The system prompt already occupies ~50 instructions
+- User instruction budget: **~150–200** (roughly 200 lines)
+- Exceeding this budget causes the agent to **start ignoring** critical instructions
+
+**Pruning test**: For each line, ask "Would Claude make a mistake without this?" If not, delete it.
+
+**Include**: Build/test commands, non-standard coding conventions, architecture decisions, prohibited lists
+**Exclude**: Standard language rules (handled by linters), frequently changing information, long tutorials
+
+#### Skills — Progressive Disclosure Pattern
+
+**Skills** are the solution for staying under 200 lines while still leveraging domain knowledge:
+
+| Storage | Load Time | Purpose |
+|---------|-----------|---------|
+| `CLAUDE.md` | **Automatic every session** | Project-wide rules (under 200 lines) |
+| `.claude/skills/*.md` | **On-demand for relevant tasks** | Domain-specific knowledge |
+
+Example: API conventions, deployment procedures, DB migration rules don't need to be loaded every time. Placing them in `.claude/skills/` means they load **only when needed** — saving tokens while making specialized knowledge available.
+
+SkillReducer research (arXiv:2603.29919) found a "less-is-more" effect: compressing tool descriptions by 48% actually **improved quality by 2.8%**. Reducing information helps the agent focus on what matters.
+
+---
+
 ### Measuring Instruction Effectiveness
 
 | Metric | Measurement Method |
@@ -97,20 +188,191 @@ Think of it like placing a "Do Not Climb" warning sign next to a children's play
 | Average loop count | Number of loops required to complete a task |
 | Context efficiency | Ratio of tokens wasted on unnecessary exploration |
 
+### Output Styles and Cognitive Modes — Zero-Config Instruction Tuning
+
+Adding constraints to PROMPT.md is like installing **custom-made signs**. In contrast, Claude Code's **Output Styles** are **pre-installed mode switches** built into the agent. They change behavior patterns at zero configuration cost.
+
+The key insight: output styles **change the cognitive mode, not just the tone.** Given the same task, the agent's approach to the problem itself changes depending on the style.
+
+<Tabs>
+  <TabItem label="Explanatory">
+    ```bash
+    claude --output-style explanatory "Improve error handling in this function"
+    ```
+    The agent modifies code while **explaining why** it makes each change. Reasoning is already embedded in the PR, so reviewers only need to verify the decisions.
+
+    **Best for**: Team onboarding, junior engineers working in unfamiliar codebases, reducing code review turnaround
+  </TabItem>
+  <TabItem label="Learning">
+    ```bash
+    claude --output-style learning "Improve error handling in this function"
+    ```
+    Instead of making changes directly, the agent **guides step by step**, encouraging the learner to make the changes themselves. Coaching mode.
+
+    **Best for**: Educational purposes, lab exercises where students need to understand the principles
+  </TabItem>
+  <TabItem label="Concise">
+    ```bash
+    claude --output-style concise "Improve error handling in this function"
+    ```
+    Outputs code changes with minimal explanation. For experienced developers who just need results fast.
+
+    **Best for**: Repetitive tasks, lint fixes, applying well-known patterns
+  </TabItem>
+</Tabs>
+
+Boris Cherny's team sets **Explanatory as the default** when junior engineers work in unfamiliar services. The result: PR review time dropped — reasoning arrives attached to the code, so reviewers no longer need to reconstruct the decision chain.
+
+#### Effort Levels — Adjusting Reasoning Depth
+
+If output styles change the **direction**, effort levels adjust the **depth**.
+
+| Level | Use Case | Cost | Example |
+|-------|----------|------|---------|
+| `low` | Simple lookups, type checks | Minimal | `claude --effort low "Return type of this function?"` |
+| `medium` | General code changes | Moderate | `claude --effort medium "Add tests"` |
+| `high` | Architecture design, complex debugging | High | `claude --effort high "Design async refactoring"` |
+| `max` | Maximum reasoning depth (Opus 4.6 exclusive) | Maximum (10x+) | `claude --effort max "Security vulnerability analysis"` |
+
+Practical effort level use in Ralph loops: start with `low` in early iterations (exploration phase), then switch to `high` for core implementation — this optimizes token cost across the loop.
+
+<Aside type="tip" title="The ultrathink keyword">
+Including "ultrathink" in a prompt triggers `high` effort for that turn only. Useful when you want deep reasoning applied to **one specific question** without changing the whole session setting. Effort can also be overridden in the YAML frontmatter of a Skill or Subagent.
+</Aside>
+
+#### Custom Output Style — Per-Project Cognitive Mode
+
+When the built-in styles (Explanatory/Learning/Concise) are insufficient, you can create a **custom style**:
+
+```bash
+# Create a new custom style
+claude /output-style:new
+```
+
+In the generated Markdown file's frontmatter, `keep-coding-instructions: true/false` controls whether existing coding instructions are preserved or fully replaced. This is a **deeper level of instruction tuning than PROMPT.md** — it replaces the coding-related portion of the system prompt itself.
+
+#### PROMPT.md Tuning vs Output Styles — When to Use Which
+
+| Aspect | PROMPT.md Instruction Tuning | Output Style + Effort Level |
+|--------|----------------------------|---------------------------|
+| **Setup cost** | High — error analysis → writing → verification | Zero — a single CLI flag |
+| **Customization** | Unlimited — free-text project constraints | Limited — choose from preset list |
+| **Persistence** | Permanent — written to file, git-tracked | Per-session — must specify each time |
+| **Sign metaphor** | Custom-made signs installed on site | Factory-installed mode switches |
+| **Best for** | Project-specific recurring error correction | General behavior pattern changes |
+
+<Aside type="note" title="The two approaches are complementary">
+Use output styles to set the agent's **default behavior pattern**, then add **project-specific constraints** via PROMPT.md. Example: Explanatory mode + "Record error messages in AGENTS.md when pytest fails" — layer project rules on top of a general cognitive mode.
+</Aside>
+
+### Hooks — Deterministic Enforcement Beyond CLAUDE.md
+
+CLAUDE.md is **advisory** — it is followed roughly 80% of the time. For 100% enforcement, use **Hooks**.
+
+Hooks are an automation mechanism that triggers **shell commands / HTTP / LLM judgment** on tool calls and session events. They are defined in `~/.claude/settings.json` or the project's `.claude/settings.json`.
+
+#### 4 Handler Types
+
+| Type | Behavior | Use Case |
+|------|----------|---------|
+| **command** | Execute a shell command | Auto-format, lint check, log recording |
+| **http** | HTTP endpoint POST | External service notification, CI trigger |
+| **prompt** | Delegate judgment to LLM (Haiku) | Automatically judge "task completion" |
+| **agent** | Subagent reads files/runs commands | Complex verification like "did tests pass" |
+
+#### Real Example: Auto-Formatting with PostToolUse
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "Write",
+      "command": "npx prettier --write $CLAUDE_FILE_PATH"
+    }]
+  }
+}
+```
+
+This Hook runs Prettier automatically **every time** Claude writes a file. It is **100% reliable** compared to writing "follow Prettier format" in CLAUDE.md.
+
+#### Stop Hook for Automatic Ralph Loop Completion Verification
+
+```json
+{
+  "hooks": {
+    "Stop": [{
+      "type": "prompt",
+      "prompt": "Are all tasks complete? Check fix_plan.md for any incomplete items.",
+      "model": "haiku"
+    }]
+  }
+}
+```
+
+The `prompt` type Hook **delegates judgment** to the Haiku model. If it returns `"ok": false`, the agent continues working. This is the key pattern for automating the manual verification step in the Ralph loop.
+
+<Aside type="caution" title="Hook Security Rules">
+- A PreToolUse Hook deny **always takes priority** over a permission rule allow — Hooks can tighten constraints but cannot loosen them
+- Use the `if` field (v2.1.85+) to match only specific patterns: `"if": "Bash(git *)"` → triggers only on git commands
+- Hooks can only be defined in the user's settings.json — agents cannot modify their own Hooks
+</Aside>
+
+---
+
+### Instruction File Comparison Across Tools
+
+Instruction files are a common pattern across all AI coding tools, but the implementation differs per tool:
+
+| Tool | File | Hierarchy | Notable Features |
+|------|------|-----------|-----------------|
+| **Claude Code** | `CLAUDE.md` | 5-level + Skills | @import, advisory (~80%), supplemented by Hooks |
+| **Cursor** | `.cursor/rules/` | Directory-based | Migrated from .cursorrules, glob pattern matching |
+| **Windsurf** | `.windsurf/rules/` | Directory-based | Cascade engine auto-detects context |
+| **Codex CLI** | `AGENTS.md` | Tool-neutral | 60,000+ repo adoption, 25+ agent compatible |
+| **GitHub Copilot** | `.github/copilot-instructions.md` | Single file | Combined with VS Code 3-tier memory |
+
+<Aside type="note" title="Limits of Cross-Tool Compatibility">
+All tools use Markdown, but **they do not read each other's files**. `CLAUDE.md` is read only by Claude Code; `.cursorrules` only by Cursor. This is the background for `AGENTS.md` (tool-neutral) — a common format any tool can read.
+</Aside>
+
+---
+
+### Discussion Questions
+
+1. What is the difference between writing "Do not commit without tests" in CLAUDE.md versus using a Hook to force `pytest` execution via `PreToolUse: Bash(git commit*)`? Which is more effective, and why?
+2. Explain why **LLM-generated instruction files are actually harmful** according to the ETH Zurich research. "Adding an architecture overview seems helpful — why doesn't it work?"
+3. At what point does Sign Fatigue occur? **How many lines** do you predict PROMPT.md must exceed before its effect reverses? Discuss in connection with the SkillReducer research.
+4. Output styles (Explanatory/Learning/Concise) are said to change the agent's **cognitive mode**. What does "changing cognitive mode" mean technically? Which part of the system prompt is being modified?
+5. In Week 7 multi-agent systems, if each agent needs a different PROMPT.md, how would you design the separation of **shared parts vs. role-specific parts**?
+
+---
+
 ## Practicum
 
+<Aside type="tip" title="Today's Lab Goal">
+Analyze recurring errors to design deterministic constraints, then use A/B testing to quantitatively measure their effect. Lab 06 implements the full pipeline.
+</Aside>
+
 <Steps>
-1. **Error Pattern Analysis Script**
+1. **Error Pattern Analysis**
 
-   Analyze execution logs from the previous lab to extract the top 5 recurring errors.
+   Analyze execution logs from the previous lab using `log_analyzer.py` (see Lab 06) to extract the top 5 recurring errors.
 
-2. **Write and Add Instructions**
+2. **3-Tier Boundary Design**
 
-   For each recurring error, write a deterministic constraint statement and add it to PROMPT.md.
+   Classify the extracted errors into Always Do / Ask First / Never Do, and add a structured instruction section to PROMPT.md.
 
-3. **A/B Testing**
+3. **Hook Configuration**
 
-   Run the same task before and after adding instructions, then compare loop counts and token usage.
+   Implement one of the Never Do items as a `PreToolUse` Hook to guarantee 100% enforcement. Add it to `settings.json`.
+
+4. **A/B Testing**
+
+   Run the same task before and after adding instructions, comparing loop counts, token usage, and recurring error rate. Use `ab_test.py` from Lab 06.
+
+5. **Connect to Lab 06**
+
+   Use the experimental results above to complete the 4 requirements in Lab 06 (analysis report, PROMPT.md, comparison experiment, graph).
 </Steps>
 
 ## Assignment
@@ -122,9 +384,28 @@ Think of it like placing a "Do Not Climb" warning sign next to a children's play
 **Submission deadline**: 2026-04-14 23:59
 
 **Requirements**:
-1. Recurring error analysis report (minimum 3 patterns)
-2. Enhanced `PROMPT.md` (with instruction section)
-3. Experimental results comparing before and after tuning
+1. Recurring error analysis report (minimum 3 patterns, including 3-tier classification)
+2. Enhanced `PROMPT.md` (instruction section + Always Do / Never Do structure)
+3. Experimental results comparing before and after tuning (A/B test)
 4. Quantitative graph measuring instruction effectiveness
 
 </div>
+
+---
+
+## Key Summary
+
+1. **Instruction tuning = installing signs + pruning**: Includes not just adding but also pruning and reprioritizing to prevent Sign Fatigue
+2. **Do not generate instruction files with LLMs**: ETH Zurich research — 3% success rate decrease, 20% cost increase. Humans must write only "information the agent cannot infer by reasoning"
+3. **CLAUDE.md under 200 lines**: instruction budget ~150–200. Use the pruning test to remove unnecessary lines
+4. **Separate with Skills**: Domain knowledge goes in `.claude/skills/` for on-demand loading. The less-is-more effect from SkillReducer
+5. **Advisory vs Deterministic**: CLAUDE.md (~80% compliance) + Hooks (100% enforcement). Choose the level based on importance
+6. **5-level hierarchy**: Global → project → local → parent directory → child directory. The closest one takes priority
+
+## Further Reading
+
+- [How to Write a Great agents.md — GitHub Blog](https://github.blog/ai-and-ml/github-copilot/how-to-write-a-great-agents-md-lessons-from-over-2500-repositories/) — 2,500 repo analysis, 5 success factors
+- [ETH Zurich AGENTbench — InfoQ](https://www.infoq.com/news/2026/03/agents-context-file-value-review/) — Research on the negative effects of LLM-generated instruction files
+- [Claude Code Hooks Guide](https://code.claude.com/docs/en/hooks-guide) — Official docs for 24 event types, 4 handler types
+- [SkillReducer (arXiv:2603.29919)](https://arxiv.org/abs/2603.29919) — 48% tool description compression yields 2.8% quality improvement
+- [Agentic Coding — MIT Missing Semester](https://missing.csail.mit.edu/2026/agentic-coding/) — MIT regular course covering instruction files, skills, and subagents

@@ -1,7 +1,7 @@
 ---
 title: 강의계획서
 description: AI 시스템 2026 — 에이전틱 워크플로우와 하네스 엔지니어링
-lastUpdated: 2026-03-03
+lastUpdated: 2026-04-06
 ---
 
 ## 강의 기본 정보
@@ -97,13 +97,18 @@ lastUpdated: 2026-03-03
 - Karpathy, A. (2025). *autoresearch: Automated ML Research*
 - Zhang, A. et al. (2025). *Recursive LM: Language Models that Call Themselves*
 - Snell, C. et al. (2024). *Scaling LLM Test-Time Compute Optimally*
+- Hong, S. et al. (2024). *MetaGPT: Meta Programming for Multi-Agent Collaborative Framework* (ICLR 2024)
+- Qian, C. et al. (2024). *ChatDev: Communicative Agents for Software Development* (ACL 2024)
+- Damani, S. et al. (2025). *Towards a Science of Scaling Agent Systems* (DeepMind + MIT)
 
 ### 온라인 자료
 - [Model Context Protocol 공식 문서](https://modelcontextprotocol.io)
 - [vLLM 공식 문서](https://docs.vllm.ai)
 - [DeepSeek-Coder-V2 논문](https://arxiv.org/abs/2406.11931)
 - [Gemini CLI 문서](https://github.com/google-gemini/gemini-cli) — Google의 AI 코딩 CLI
-- [Codex CLI 문서](https://github.com/openai/codex-cli) — OpenAI의 터미널 코딩 에이전트
+- [Codex CLI 문서](https://github.com/openai/codex) — OpenAI의 터미널 코딩 에이전트
+- [A2A Protocol Specification](https://google.github.io/A2A/) — Google의 Agent-to-Agent 통신 표준
+- [SWE-Bench](https://www.swebench.com/) — 에이전트 코딩 벤치마크
 
 ## 수강 전 요구사항
 

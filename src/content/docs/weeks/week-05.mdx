@@ -24,9 +24,26 @@ import { Aside, Steps, Badge, Card, CardGrid } from '@astrojs/starlight/componen
   <span class="phase-tag">Phase 2</span>
   <Badge text="5주차" variant="note" />
   <Badge text="중급" variant="danger" />
+  <Badge text="강의일: 2026-03-31" variant="default" />
 </div>
 
 ## 이론 (Theory)
+
+### 왜 5주차에서 컨텍스트 관리가 중심인가
+
+4주차에서 루프 패러다임의 위력을 배웠다 — 같은 모델을 반복 호출하되, 결정론적 검증으로 품질을 확보한다. 하지만 루프가 작동하려면 **전제 조건**이 있다: **컨텍스트가 깨끗해야 한다.**
+
+4주차의 Huntley는 이 문제를 알고 있었다. 그래서 매 루프마다 새 세션을 시작하는 "fresh context" 전략을 선택했다. 하지만 이것만으로는 부족하다:
+
+- **루프 내부에서도** 컨텍스트는 오염된다 — 도구 호출 결과, 실패한 시도, 에러 메시지가 쌓인다
+- **세션 간 상태 전달**이 필요하다 — 매번 처음부터 시작하면 이전 루프의 학습이 사라진다
+- **6주차 인스트럭션 튜닝의 전제**: CLAUDE.md에 제약을 추가해도, 컨텍스트가 오염되면 에이전트가 제약을 "잊는다"
+
+이번 주의 핵심 질문: **어떻게 컨텍스트를 결정론적으로 관리할 것인가?**
+
+이 질문에 답하기 위해 먼저 Context Rot이 **왜** 발생하는지, **얼마나** 심각한지를 실증 데이터로 확인하고, 그 다음 해법을 쌓아 올린다.
+
+---
 
 ### Context Rot란?
 
@@ -52,13 +69,71 @@ import { Aside, Steps, Badge, Card, CardGrid } from '@astrojs/starlight/componen
 - 응답이 길어지고 요점을 잃어버림
 </Aside>
 
+#### 실증 데이터: Chroma의 Context Rot 연구
+
+"컨텍스트가 길어지면 나빠진다"는 직관적이지만, **얼마나** 나빠지는지는 Chroma의 2026년 실증 연구가 처음으로 정량화했다. 18개 frontier 모델(Claude, GPT, Gemini, Llama 등)을 대상으로 테스트한 결과:
+
+| 발견 | 수치 |
+|------|------|
+| 중간 위치(mid-window) 정확도 하락 | **30%+** |
+| 입력 길이와 정확도 상관 | **모든 모델에서 음의 상관** — 예외 없음 |
+| 반직관적 결과 | 섞인(shuffled) 문서가 논리적으로 정렬된 문서보다 정확도 높음 |
+
+마지막 발견이 특히 중요하다. 논리적 순서로 배치하면 모델이 "이미 앞에서 봤으니 뒤는 대충 읽어도 된다"고 판단하는 경향이 있다. 섞으면 매 위치에서 주의를 기울여야 하므로 오히려 정확도가 올라간다.
+
+#### 1M 토큰 시대 — 큰 창이 해결책인가?
+
+2026년 기준 frontier 모델의 컨텍스트 창:
+
+| 모델 | 공식 컨텍스트 | 실효 사용량 |
+|------|-------------|-----------|
+| Claude Opus/Sonnet 4.6 | 1M 토큰 | ~600-700K |
+| GPT-5.4 | 1M 토큰 | ~600-700K |
+| Gemini 2.5 Pro | 1M 토큰 | ~600-700K |
+
+실효 사용량이 60-70%인 이유: 나머지는 시스템 프롬프트(~50K), 도구 스키마(~30K), 안전 마진(~200K)이 차지한다.
+
+<Aside type="danger" title="컨텍스트 창이 커도 Context Rot은 사라지지 않는다">
+1M 토큰 창을 가진 모델도 Chroma 연구에서 동일한 패턴을 보였다. 창이 크면 **더 많은 정보를 넣을 수 있지만**, 넣을수록 중간 위치의 정확도가 떨어진다. 큰 창은 Context Rot의 해법이 아니라, **Context Rot이 발생할 공간이 더 넓어지는 것**이다.
+</Aside>
+
+<Aside type="tip" title="Claude Code 내부에서는...">
+Claude Code는 Context Rot 방지를 위해 **auto-compaction**을 내장하고 있다:
+
+- **트리거**: 컨텍스트가 모델 최대의 **~75%에 도달**하면 자동 압축 (`compact-2026-01-12` beta API). 턴 수가 아닌 **토큰 기반** 트리거
+- **알고리즘**: 최근 4개 메시지 보존 + 나머지를 Markdown→plaintext 변환, 중복 도구 결과 제거
+- **CLAUDE.md 3레벨 계층**: `~/.claude/CLAUDE.md`(전역) → `<project>/.claude/CLAUDE.md`(프로젝트) → `<workspace>/CLAUDE.md`(로컬). 전체 합산 12,000자 제한
+- **토큰 추적**: input/cache_creation/cache_read/output 4종 토큰을 매 API 호출마다 기록. `/cost`로 실시간 확인
+- **수동 트리거**: `/compact` 명령으로 즉시 압축 실행 가능
+
+→ 상세: [참고자료 > Claude Code 내부 구조](/reference/claude-code-internals)
+</Aside>
+
+#### Compaction 전략 — 무엇을 버리고 무엇을 남길 것인가
+
+auto-compaction이 작동할 때, **보존 우선순위**가 결정적이다:
+
+| 우선순위 | 보존 대상 | 이유 |
+|----------|----------|------|
+| 1 (최고) | 시스템 프롬프트 + CLAUDE.md | 에이전트의 "헌법" — 이것을 잃으면 행동 규칙이 사라진다 |
+| 2 | 최근 4개 메시지 | 현재 작업의 즉각적 맥락 |
+| 3 | 현재 태스크의 도구 결과 | 방금 읽은 파일, 방금 실행한 테스트 결과 |
+| 4 (최저) | 오래된 대화 + 이전 도구 결과 | 요약으로 대체 가능 |
+
+**압축하지 말아야 할 때**: 다음 상황에서는 compaction보다 **세션을 끊고 새로 시작**하는 것이 낫다:
+- 대화 주제가 완전히 전환된 경우 (이전 맥락이 오히려 방해)
+- 연속 5회 이상 같은 에러가 반복되는 경우 (Context Rot이 이미 심각)
+- 요약 자체가 원본의 50% 이상인 경우 (압축 효율이 없음)
+
+이것이 4주차에서 Huntley가 "fresh context"를 선택한 이유다 — 루프 간에는 compaction보다 **완전 초기화 + 상태 파일 전달**이 더 결정론적이다.
+
 ### Ralph 루프의 해법: Context Window Wiping
 
 Ralph 루프의 핵심 혁신 중 하나는 **태스크 완료 또는 실패 후 컨텍스트를 완전히 초기화**하는 것이다:
 
 ```python
 class RalphContextManager:
-    def __init__(self, max_tokens: int = 100_000):
+    def __init__(self, max_tokens: int = 200_000):
         self.max_tokens = max_tokens
         self.state_file = "claude-progress.txt"
 
@@ -122,10 +197,161 @@ class RalphContextManager:
 - [ ] divide() 함수 (0 나눗셈 예외 처리 필수)
 ```
 
+---
+
+### 토큰 경제학 — 40-70%의 낭비를 줄이는 법
+
+컨텍스트 관리의 궁극적 목표는 **같은 예산으로 더 많은 유용한 작업**을 하는 것이다. 실측 데이터에 따르면 에이전트 입력 토큰의 **40-70%가 낭비**다 — 중복된 도구 결과, 불필요한 파일 내용, 과도한 시스템 프롬프트.
+
+#### 모델 라우팅 — 모든 작업에 Opus를 쓸 필요는 없다
+
+| 태스크 유형 | 비중 | 권장 모델 | 비용 (1M 토큰) |
+|------------|------|----------|---------------|
+| 단순 조회, 포맷팅, 타입 확인 | 60-70% | **Haiku** | $1 / $5 |
+| 표준 코딩, 버그 수정, 기능 추가 | 25-30% | **Sonnet** | $15 / $75 |
+| 아키텍처 설계, 복잡한 디버깅 | 5-10% | **Opus** | $15 / $75 |
+
+모델 라우팅만으로 **5-8배 비용 절감**이 가능하다. Claude Code의 `effort` 파라미터(4주차 참조)가 이 라우팅의 제품화된 형태다.
+
+#### Prompt Caching — 반복을 자산으로 바꾸기
+
+에이전트의 매 턴에서 시스템 프롬프트, 도구 스키마, CLAUDE.md는 **동일한 내용이 반복**된다. Prompt caching은 이 정적 부분을 캐시하여 재사용한다:
+
+| 작업 | 가격 (기본 대비) |
+|------|----------------|
+| 캐시 쓰기 (5분 TTL) | 1.25x |
+| 캐시 쓰기 (1시간 TTL) | 2x |
+| **캐시 읽기** | **0.1x** (90% 절감) |
+
+루프 패러다임에서의 시사점:
+- **연속 세션**: 첫 턴에서 캐시 생성 → 이후 턴에서 0.1x로 읽기 = 매우 경제적
+- **Ralph fresh context**: 매 루프마다 새 세션 → 캐시 재생성 필요 = 비용 증가
+- **트레이드오프**: Context Rot 방지(fresh) vs 캐시 효율(continuous). 4주차의 Huntley Showdown과 같은 문제
+
+<Aside type="note" title="CLAUDE.md 토큰 예산">
+CLAUDE.md는 **200줄 이하**로 유지하라. 시스템 프롬프트가 이미 ~50개 instruction을 차지하므로, 사용자가 쓸 수 있는 instruction budget은 ~150-200개다.
+
+핵심 원칙:
+- "린터가 할 수 있는 것은 CLAUDE.md에 쓰지 말라" — ESLint/mypy에 맡길 규칙을 자연어로 중복하면 토큰 낭비
+- SkillReducer 연구(arXiv:2603.29919): 도구 설명을 48% 압축하면 오히려 **품질이 2.8% 향상** — less-is-more 효과
+- Simon Willison의 9,649건 실험: YAML이 특수 토큰 절약 형식보다 우수 — 모델이 학습 데이터에서 자주 본 형식이 효과적
+</Aside>
+
+---
+
+### Initializer 패턴 — 2-phase 상태 관리
+
+Anthropic의 공식 하네스 가이드에서 권장하는 **2-phase 패턴**은 위 상태 파일 설계를 체계화한 것이다:
+
+**Phase 1 — Initializer (첫 루프)**:
+1. 요구사항을 파싱하여 **feature list를 JSON으로 생성**
+2. `claude-progress.txt` 초기화
+3. `init.sh` (환경 설정 스크립트) 생성
+
+```json
+{
+  "features": [
+    {"id": "F001", "name": "사용자 인증", "status": "pending", "files": ["src/auth.py"]},
+    {"id": "F002", "name": "대시보드 UI", "status": "pending", "files": ["src/dashboard.py"]}
+  ],
+  "constraints": ["pytest 통과 필수", "타입 힌트 100%"]
+}
+```
+
+<Aside type="caution" title="왜 JSON인가?">
+feature list를 Markdown이 아닌 **JSON으로 저장하는 이유**: 모델이 자연어 spec을 함부로 수정하는 경향이 있다. "사용자 인증 구현" 같은 Markdown 항목은 모델이 "사용자 인증 및 권한 관리 구현"으로 슬쩍 확장할 수 있다. JSON의 엄격한 구조는 이런 scope creep을 방지한다.
+</Aside>
+
+**Phase 2 — Coding Agent (이후 루프)**:
+1. `init.sh` 실행으로 환경 설정
+2. JSON에서 `"status": "pending"` 항목을 꺼내 작업
+3. 완료 시 `"status": "done"` + `claude-progress.txt`에 기록
+4. 다음 루프는 JSON을 읽고 남은 항목부터 시작
+
+이 패턴은 현재 week-05의 state file 3종(`claude-progress.txt`, `fix_plan.md`, `@codebase_map.md`)의 **상위 추상화**다. JSON feature list가 `fix_plan.md`를, init.sh가 `@codebase_map.md`를 대체한다.
+
+---
+
+### 도구별 컨텍스트 전략 비교
+
+컨텍스트를 관리하는 접근법은 도구마다 다르다. 2026년 기준 세 가지 전략이 경쟁 중이다:
+
+| 전략 | 대표 도구 | 방식 | 장점 | 단점 |
+|------|----------|------|------|------|
+| **Explicit** | Cursor | 사용자가 컨텍스트에 넣을 파일을 직접 선택 | 정밀한 제어, 토큰 낭비 최소 | 수동 노동, 누락 리스크 |
+| **Ambient** | Windsurf (Cascade) | 도구가 자동으로 관련 파일 탐지 | 편리, 누락 방지 | 과다 포함, 토큰 낭비 리스크 |
+| **Hybrid** | Claude Code | 파일 기반 영속(CLAUDE.md) + 자동 압축 | 균형, 루프 친화적 | 설정 필요, 학습 곡선 |
+
+VS Code Copilot은 2026년에 **3계층 메모리**(user/repository/session)를 도입하여, 사용자 선호(전역) → 프로젝트 규칙(레포) → 현재 대화(세션)를 분리했다. Claude Code의 CLAUDE.md 3레벨 계층(전역/프로젝트/로컬)과 동일한 설계 원리다.
+
+<Aside type="note" title="6주차로의 다리">
+어떤 컨텍스트 전략을 선택하든, 최종적으로 **컨텍스트 안에 무엇을 넣느냐**가 품질을 결정한다. 다음 주(6주차)에서 다루는 **인스트럭션 튜닝**은 바로 이 질문에 답한다 — CLAUDE.md에 어떤 제약을 어떻게 작성할 것인가.
+</Aside>
+
+---
+
+### 토큰 효율적 데이터 직렬화
+
+에이전트가 LLM에 구조화된 데이터를 보낼 때, 직렬화 포맷에 따라 토큰 소비가 **2~3배** 차이난다. 동일한 50명 사용자 목록을 7가지 포맷으로 직렬화한 실험 결과:
+
+| 포맷 | 토큰 수 | LLM 정확도 | 적합 상황 |
+|------|--------|-----------|----------|
+| CSV | ~800 | 44.3% | 순수 테이블 (정확도 주의) |
+| Markdown-KV | ~950 | **60.7%** | 단순 키-값 검색 |
+| TOON | 993 | 76.4% | 균일 배열 데이터 |
+| JSON (compact) | ~1,100 | 73.7% | **범용 — 가장 안전한 균형점** |
+| JSON (pretty) | 1,481 | 75.0% | 인간 가독성 필요 시 |
+| YAML | 1,710 | 74.5% | 중첩 설정, 프롬프트 구조화 |
+| XML | 2,690 | 72.1% | 레거시 시스템 연동 |
+
+<Aside type="caution" title="토큰 효율 ≠ 최적 포맷">
+토큰 효율과 정확도는 종종 **역상관**한다. CSV가 토큰 최소이지만 정확도 최하(44.3%). Tam et al. (2024, "Let Me Speak Freely?")는 포맷 제약 자체가 LLM 추론 성능을 **10-15% 저하**시킬 수 있다고 보고했다. "가장 적은 토큰 = 가장 좋은 포맷"이 아니다.
+</Aside>
+
+#### TOON — 토큰 최적화 직렬화의 한 사례
+
+TOON (Token Oriented Object Notation, 2025)은 JSON의 구조를 유지하되 따옴표, 중괄호, 쉼표를 제거하고, 균일 배열을 CSV식 테이블로 표현한다. GitHub 23.7K stars, npm 1.6M/월 다운로드로 커뮤니티 관심이 실재한다.
+
+```
+// TOON 예시: 균일 배열 → 헤더 + 행 형식
+users[3]{id,name,email}:
+  1,Alice,alice@example.com
+  2,Bob,bob@example.com
+  3,Carol,carol@example.com
+```
+
+**강점**: 균일 배열에서 pretty JSON 대비 **40-60%** 토큰 절감.
+**한계**: 비균일/중첩 데이터에서 compact JSON보다 **15-20% 더 클 수 있음**. Spec이 Working Draft(v3.0, 3주 만에 v0.8→v3.0)이고, LLM이 TOON으로 훈련되지 않아 프롬프트에 포맷 설명이 필요하다.
+
+#### 실무 권장
+
+- **기본값**: compact JSON — 모든 LLM이 이해하고, 생태계가 성숙. pretty JSON 대비 25-40% 절감.
+- **대규모 균일 테이블(100+ rows)**: TOON 또는 CSV 검토 — 단, 정확도 트레이드오프 측정 필수.
+- **API 기반 구조화 출력**: function calling / structured output API가 있으면 그것이 최적 (Microsoft 측정: JSON 대비 **42%** 절감).
+- **7주차 멀티에이전트**: 에이전트 간 아티팩트를 compact JSON으로 설계. [Week 7 아티팩트 핸드오프](/weeks/week-07/#아티팩트-기반-핸드오프-설계) 참조.
+
+---
+
+### 강의 중 토론 질문
+
+1. **1M 토큰 컨텍스트가 있으면 Context Rot은 해결되는가?** Chroma 연구 데이터를 근거로 답하라.
+2. Ralph의 **fresh context vs 연속 세션** — 캐싱 비용(fresh = 매번 재생성, continuous = 0.1x 읽기)까지 고려하면 어느 쪽이 경제적인가? 어떤 조건에서 역전되는가?
+3. CLAUDE.md를 **200줄 이하로 유지하라**는 조언의 근거는 무엇인가? SkillReducer의 "less-is-more" 효과와 연결하여 설명하라.
+4. Chroma 연구에서 **섞인 문서가 정렬된 문서보다 정확도가 높은** 이유를 추론하라. 이것이 컨텍스트 설계에 주는 시사점은?
+5. Initializer 패턴에서 feature list를 **JSON으로 쓰는 이유**는 무엇인가? Markdown으로 쓰면 어떤 문제가 생기는가?
+
+---
+
 ## 실습 (Practicum)
 
+<Aside type="tip" title="오늘 실습의 목표">
+컨텍스트 사용량을 직접 측정하고, 압축 전후를 비교하여 Context Rot의 실체를 체감한다. Lab 05에서 전체 시스템을 구현한다.
+</Aside>
+
 <Steps>
-1. **토큰 카운터 통합**
+1. **토큰 사용량 측정**
+
+   Claude Code 세션에서 `/cost` 명령을 실행하여 현재 세션의 토큰 사용량을 확인한다. 10턴 대화 후 다시 측정하여 증가량을 기록한다.
 
    ```python
    import anthropic
@@ -139,13 +365,17 @@ class RalphContextManager:
        return response.input_tokens
    ```
 
-2. **자동 컨텍스트 모니터링**
+2. **Compaction 전후 비교**
 
-   현재 컨텍스트 토큰 수를 매 루프마다 측정하고, 임계값 초과 시 자동 초기화하는 시스템을 구현한다.
+   20턴 이상 대화한 세션에서 `/compact` 명령을 실행한다. 압축 전후의 토큰 수, 응답 품질, 작업 연속성을 비교 기록한다.
 
 3. **상태 파일 시스템 구축**
 
-   `fix_plan.md`와 `claude-progress.txt`를 자동으로 업데이트하는 헬퍼 함수를 작성한다.
+   `fix_plan.md`와 `claude-progress.txt`를 자동으로 업데이트하는 헬퍼 함수를 작성한다. Lab 05의 `state_tracker.py`를 참고한다.
+
+4. **Lab 05 연결**
+
+   위 실험 결과를 바탕으로 Lab 05의 `token_counter.py`, `context_manager.py`, `state_tracker.py`, `main.py` 4개 모듈을 구현한다.
 </Steps>
 
 ## 과제 (Assignment)
@@ -163,3 +393,23 @@ class RalphContextManager:
 4. 상태 추적 시스템 (`fix_plan.md` + `claude-progress.txt`) 동작 증명
 
 </div>
+
+---
+
+## 핵심 정리
+
+1. **Context Rot은 실증적 현상이다** — Chroma 연구: 18개 모델 모두에서 입력이 길어질수록 정확도 하락. 중간 위치에서 30%+ 저하.
+2. **1M 토큰 창이 해결책이 아니다** — 큰 창 = Context Rot이 발생할 공간이 더 넓어질 뿐. 실효 사용량은 60-70%.
+3. **Compaction은 토큰 기반** — 모델 최대의 ~75% 도달 시 자동 트리거. 최근 4개 메시지 보존, 나머지 요약.
+4. **Ralph의 fresh context가 루프 간 최선** — 루프 내부에서는 compaction, 루프 사이에서는 완전 초기화 + 상태 파일 전달.
+5. **토큰 40-70%가 낭비** — 모델 라우팅(Haiku 60-70%), prompt caching(read 0.1x), CLAUDE.md 200줄 이하로 절감.
+6. **Initializer 패턴** — JSON feature list + claude-progress.txt + init.sh 2-phase 구조로 상태를 결정론적으로 관리.
+
+## 더 읽을거리
+
+- [Chroma: Context Window Research](https://research.trychroma.com/) — 18개 모델 대상 Context Rot 실증 연구
+- [Anthropic: Prompt Caching Documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) — 캐시 가격, TTL, 사용법
+- [SkillReducer (arXiv:2603.29919)](https://arxiv.org/abs/2603.29919) — 도구 설명 압축이 품질을 높이는 less-is-more 효과
+- [Simon Willison: YAML vs Token-Saving Formats](https://simonwillison.net/) — 9,649건 실험, 익숙한 형식이 우수
+- [Tam et al. "Let Me Speak Freely?" (arXiv:2408.02442)](https://arxiv.org/abs/2408.02442) — 포맷 제약이 LLM 추론 성능에 미치는 영향 (10-15% 저하)
+- [TOON Format Specification](https://github.com/toon-format/spec) — Token Oriented Object Notation, 균일 배열 토큰 최적화

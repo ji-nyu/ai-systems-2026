@@ -24,9 +24,26 @@ import { Aside, Steps, Badge, Card, CardGrid } from '@astrojs/starlight/componen
   <span class="phase-tag">Phase 2</span>
   <Badge text="Week 5" variant="note" />
   <Badge text="Intermediate" variant="danger" />
+  <Badge text="Lecture: 2026-03-31" variant="default" />
 </div>
 
 ## Theory
+
+### Why Context Management is Central in Week 5
+
+In Week 4 we learned the power of the loop paradigm — calling the same model repeatedly while using deterministic validation to ensure quality. But for a loop to work, there is a **prerequisite**: **the context must be clean.**
+
+Week 4's Huntley knew about this problem. That's why he chose a "fresh context" strategy — starting a new session on every loop iteration. But that alone isn't enough:
+
+- **Even inside a loop**, context gets polluted — tool call results, failed attempts, and error messages accumulate
+- **State must be passed between sessions** — restarting from scratch every time loses the learning from the previous loop
+- **The prerequisite for Week 6's instruction tuning**: even if you add constraints in CLAUDE.md, a polluted context will cause the agent to "forget" those constraints
+
+The central question for this week: **how do we manage context deterministically?**
+
+To answer that question, we'll first confirm with empirical data **why** Context Rot happens and **how serious** it is, then build up solutions from there.
+
+---
 
 ### What is Context Rot?
 
@@ -52,13 +69,72 @@ Context Rot is the phenomenon where an agent's context window becomes increasing
 - Responses grow longer and lose the point
 </Aside>
 
+#### Empirical Data: Chroma's Context Rot Research
+
+"Longer context gets worse" is intuitive, but **how much** worse was first quantified by Chroma's 2026 empirical study. Testing 18 frontier models (Claude, GPT, Gemini, Llama, and others):
+
+| Finding | Data |
+|---------|------|
+| Accuracy drop at mid-window position | **30%+** |
+| Correlation between input length and accuracy | **Negative across all models** — no exceptions |
+| Counter-intuitive result | Shuffled documents scored higher accuracy than logically ordered documents |
+
+The last finding is especially important. When documents are arranged in logical order, models tend to judge "I already saw this earlier, I can skim the rest." Shuffling forces attention at every position, which actually raises accuracy.
+
+#### The 1M Token Era — Is a Larger Window the Solution?
+
+Frontier model context windows as of 2026:
+
+| Model | Official Context | Effective Usage |
+|-------|-----------------|-----------------|
+| Claude Opus/Sonnet 4.6 | 1M tokens | ~600-700K |
+| GPT-5.4 | 1M tokens | ~600-700K |
+| Gemini 2.5 Pro | 1M tokens | ~600-700K |
+
+The reason effective usage is 60-70%: the remainder is consumed by the system prompt (~50K), tool schemas (~30K), and safety margin (~200K).
+
+<Aside type="danger" title="Bigger context doesn't eliminate Context Rot">
+Models with a 1M token window showed the same pattern in the Chroma study. A larger window means **you can fit more information in**, but the more you add, the more mid-window accuracy degrades. A bigger window is not a solution to Context Rot — it's **a larger space for Context Rot to occur in**.
+</Aside>
+
+<Aside type="tip" title="Inside Claude Code...">
+Claude Code has **auto-compaction** built in to prevent Context Rot:
+
+- **Trigger**: Automatically compresses when context reaches **~75% of the model's maximum** (`compact-2026-01-12` beta API). Token-based trigger, **not turn-based**
+- **Algorithm**: Preserves the last 4 messages + converts the rest from Markdown to plaintext, removes duplicate tool results
+- **CLAUDE.md 3-level hierarchy**: `~/.claude/CLAUDE.md` (global) → `<project>/.claude/CLAUDE.md` (project) → `<workspace>/CLAUDE.md` (local). Total combined limit of 12,000 characters
+- **Token tracking**: Records 4 token types per API call — input/cache_creation/cache_read/output. Check in real time with `/cost`
+- **Manual trigger**: Run `/compact` to compress immediately on demand
+
+→ Details: [Reference > Claude Code Internals](/en/reference/claude-code-internals)
+</Aside>
+
+#### Compaction Strategy — What to Discard, What to Keep
+
+When auto-compaction fires, **preservation priority** is decisive:
+
+| Priority | What to Keep | Why |
+|----------|-------------|-----|
+| 1 (highest) | System prompt + CLAUDE.md | The agent's "constitution" — losing this erases behavioral rules |
+| 2 | Last 4 messages | Immediate context of the current task |
+| 3 | Tool results for the current task | The file just read, the test just run |
+| 4 (lowest) | Old conversation + previous tool results | Can be replaced with a summary |
+
+**When NOT to compress**: In the following situations, it is better to **end the session and start fresh** rather than compact:
+
+- The conversation topic has completely shifted (previous context is a hindrance)
+- The same error has repeated 5+ times in a row (Context Rot is already severe)
+- The summary itself is 50%+ the size of the original (no compression benefit)
+
+This is why Huntley in Week 4 chose "fresh context" — between loop iterations, **full reset + state file handoff** is more deterministic than compaction.
+
 ### The Ralph Loop Solution: Context Window Wiping
 
 One of the key innovations of the Ralph Loop is **completely resetting the context after a task completes or fails**:
 
 ```python
 class RalphContextManager:
-    def __init__(self, max_tokens: int = 100_000):
+    def __init__(self, max_tokens: int = 200_000):
         self.max_tokens = max_tokens
         self.state_file = "claude-progress.txt"
 
@@ -122,10 +198,161 @@ class RalphContextManager:
 - [ ] divide() function (must handle division-by-zero exception)
 ```
 
+---
+
+### Token Economics — Cutting 40-70% Waste
+
+The ultimate goal of context management is to **do more useful work on the same budget**. Empirical data shows that **40-70% of agent input tokens are wasted** — duplicate tool results, unnecessary file contents, bloated system prompts.
+
+#### Model Routing — You Don't Need Opus for Everything
+
+| Task Type | Share | Recommended Model | Cost (1M tokens) |
+|-----------|-------|------------------|-----------------|
+| Simple lookups, formatting, type checking | 60-70% | **Haiku** | $1 / $5 |
+| Standard coding, bug fixes, feature additions | 25-30% | **Sonnet** | $15 / $75 |
+| Architecture design, complex debugging | 5-10% | **Opus** | $15 / $75 |
+
+Model routing alone enables **5-8x cost reduction**. Claude Code's `effort` parameter (see Week 4) is the productized form of this routing.
+
+#### Prompt Caching — Turning Repetition into an Asset
+
+On every agent turn, the system prompt, tool schemas, and CLAUDE.md contain **the same content repeated**. Prompt caching stores this static portion and reuses it:
+
+| Operation | Price (vs. baseline) |
+|-----------|---------------------|
+| Cache write (5-min TTL) | 1.25x |
+| Cache write (1-hour TTL) | 2x |
+| **Cache read** | **0.1x** (90% savings) |
+
+Implications for the loop paradigm:
+- **Continuous session**: Create cache on first turn → read at 0.1x on subsequent turns = very economical
+- **Ralph fresh context**: New session every loop → cache must be recreated = higher cost
+- **Trade-off**: Context Rot prevention (fresh) vs. cache efficiency (continuous). Same problem as Week 4's Huntley Showdown
+
+<Aside type="note" title="CLAUDE.md Token Budget">
+Keep CLAUDE.md **under 200 lines**. The system prompt already occupies ~50 instructions, so the user's available instruction budget is ~150-200.
+
+Core principles:
+- "Don't write in CLAUDE.md what a linter can do" — duplicating ESLint/mypy rules as natural language wastes tokens
+- SkillReducer research (arXiv:2603.29919): compressing tool descriptions by 48% actually **improves quality by 2.8%** — less-is-more effect
+- Simon Willison's 9,649-run experiment: YAML outperforms special token-saving formats — formats the model has seen frequently in training data work better
+</Aside>
+
+---
+
+### The Initializer Pattern — 2-Phase State Management
+
+The **2-phase pattern** recommended in Anthropic's official harness guide systematizes the state file design above:
+
+**Phase 1 — Initializer (first loop)**:
+1. Parse requirements and **generate a feature list as JSON**
+2. Initialize `claude-progress.txt`
+3. Generate `init.sh` (environment setup script)
+
+```json
+{
+  "features": [
+    {"id": "F001", "name": "User Authentication", "status": "pending", "files": ["src/auth.py"]},
+    {"id": "F002", "name": "Dashboard UI", "status": "pending", "files": ["src/dashboard.py"]}
+  ],
+  "constraints": ["pytest must pass", "100% type hints"]
+}
+```
+
+<Aside type="caution" title="Why JSON?">
+The reason to store the feature list as **JSON rather than Markdown**: models tend to freely modify natural-language specs. A Markdown item like "Implement user authentication" can be silently expanded by the model to "Implement user authentication and authorization management." JSON's strict structure prevents this kind of scope creep.
+</Aside>
+
+**Phase 2 — Coding Agent (subsequent loops)**:
+1. Run `init.sh` to configure the environment
+2. Pull a `"status": "pending"` item from the JSON and work on it
+3. On completion: set `"status": "done"` + record in `claude-progress.txt`
+4. The next loop reads the JSON and picks up from remaining items
+
+This pattern is a **higher-level abstraction** of the three state files in today's Week 5 (`claude-progress.txt`, `fix_plan.md`, `@codebase_map.md`). The JSON feature list replaces `fix_plan.md`; `init.sh` replaces `@codebase_map.md`.
+
+---
+
+### Context Strategy Comparison by Tool
+
+Context management approaches differ by tool. As of 2026, three strategies are competing:
+
+| Strategy | Representative Tool | Approach | Pros | Cons |
+|----------|-------------------|----------|------|------|
+| **Explicit** | Cursor | User manually selects which files go into context | Precise control, minimal token waste | Manual labor, risk of omission |
+| **Ambient** | Windsurf (Cascade) | Tool automatically detects relevant files | Convenient, prevents omissions | Risk of over-inclusion, token waste |
+| **Hybrid** | Claude Code | File-based persistence (CLAUDE.md) + auto-compaction | Balanced, loop-friendly | Requires setup, learning curve |
+
+VS Code Copilot introduced **3-tier memory** (user/repository/session) in 2026, separating user preferences (global) → project rules (repo) → current conversation (session). This is the same design principle as Claude Code's 3-level CLAUDE.md hierarchy (global/project/local).
+
+<Aside type="note" title="Bridge to Week 6">
+Whatever context strategy you choose, ultimately **what you put inside the context** determines quality. **Instruction tuning**, covered next week (Week 6), answers exactly this question �� what constraints to write in CLAUDE.md and how to write them.
+</Aside>
+
+---
+
+### Token-Efficient Data Serialization
+
+When agents send structured data to LLMs, the serialization format can cause **2–3x** differences in token consumption. Results from serializing the same 50-user list in 7 formats:
+
+| Format | Tokens | LLM Accuracy | Best For |
+|--------|--------|-------------|----------|
+| CSV | ~800 | 44.3% | Pure tables (accuracy risk) |
+| Markdown-KV | ~950 | **60.7%** | Simple key-value retrieval |
+| TOON | 993 | 76.4% | Uniform array data |
+| JSON (compact) | ~1,100 | 73.7% | **General purpose — safest balance** |
+| JSON (pretty) | 1,481 | 75.0% | When human readability is needed |
+| YAML | 1,710 | 74.5% | Nested configs, prompt structuring |
+| XML | 2,690 | 72.1% | Legacy system integration |
+
+<Aside type="caution" title="Token Efficiency ≠ Best Format">
+Token efficiency and accuracy are often **inversely correlated**. CSV uses the fewest tokens but has the lowest accuracy (44.3%). Tam et al. (2024, "Let Me Speak Freely?") reported that format constraints alone can **degrade LLM reasoning performance by 10–15%**. "Fewest tokens = best format" is not true.
+</Aside>
+
+#### TOON — A Case Study in Token-Optimized Serialization
+
+TOON (Token Oriented Object Notation, 2025) preserves JSON's structure while removing quotes, braces, and commas, representing uniform arrays as CSV-style tables. With 23.7K GitHub stars and 1.6M monthly npm downloads, community interest is real.
+
+```
+// TOON example: uniform array → header + row format
+users[3]{id,name,email}:
+  1,Alice,alice@example.com
+  2,Bob,bob@example.com
+  3,Carol,carol@example.com
+```
+
+**Strengths**: 40–60% token reduction on uniform arrays vs pretty JSON.
+**Limitations**: Can be **15–20% larger** than compact JSON for non-uniform/nested data. The spec is a Working Draft (v3.0 reached in just 3 weeks from v0.8), and LLMs haven't been trained on TOON, requiring format explanation in prompts.
+
+#### Practical Recommendations
+
+- **Default**: Compact JSON — all LLMs understand it, mature ecosystem. 25–40% savings vs pretty JSON.
+- **Large uniform tables (100+ rows)**: Consider TOON or CSV — but always measure the accuracy trade-off.
+- **API-based structured output**: Function calling / structured output APIs are optimal (Microsoft measured: **42%** savings vs JSON).
+- **Week 7 multi-agent**: Design inter-agent artifacts with compact JSON. See [Week 7 Artifact Handoff](/en/weeks/week-07/#artifact-based-handoff-design).
+
+---
+
+### Discussion Questions
+
+1. **Does a 1M token context solve Context Rot?** Answer using evidence from the Chroma research data.
+2. Ralph's **fresh context vs. continuous session** — when you factor in caching costs (fresh = recreate every time, continuous = read at 0.1x), which is more economical? Under what conditions does this flip?
+3. What is the basis for the advice to **keep CLAUDE.md under 200 lines**? Connect your answer to SkillReducer's "less-is-more" effect.
+4. Reason why **shuffled documents scored higher accuracy than ordered documents** in the Chroma study. What does this imply for context design?
+5. Why does the Initializer pattern store the feature list **as JSON**? What problem arises if you use Markdown instead?
+
+---
+
 ## Practicum
 
+<Aside type="tip" title="Today's Practicum Goal">
+Measure context usage directly and compare before and after compaction to experience Context Rot firsthand. Lab 05 has you implement the full system.
+</Aside>
+
 <Steps>
-1. **Integrate a Token Counter**
+1. **Measure Token Usage**
+
+   Run the `/cost` command in a Claude Code session to check the current session's token usage. After 10 turns of conversation, measure again and record the increase.
 
    ```python
    import anthropic
@@ -139,13 +366,17 @@ class RalphContextManager:
        return response.input_tokens
    ```
 
-2. **Automatic Context Monitoring**
+2. **Before/After Compaction Comparison**
 
-   Measure the current context token count on every loop iteration and implement a system that automatically resets it when a threshold is exceeded.
+   In a session with 20+ turns of conversation, run the `/compact` command. Record and compare token counts, response quality, and task continuity before and after compression.
 
 3. **Build a State File System**
 
-   Write helper functions that automatically update `fix_plan.md` and `claude-progress.txt`.
+   Write helper functions that automatically update `fix_plan.md` and `claude-progress.txt`. Refer to `state_tracker.py` in Lab 05.
+
+4. **Connect to Lab 05**
+
+   Based on the experiment results above, implement the four modules in Lab 05: `token_counter.py`, `context_manager.py`, `state_tracker.py`, and `main.py`.
 </Steps>
 
 ## Assignment
@@ -163,3 +394,21 @@ class RalphContextManager:
 4. Demonstration that the state tracking system (`fix_plan.md` + `claude-progress.txt`) works correctly
 
 </div>
+
+---
+
+## Key Summary
+
+1. **Context Rot is an empirical phenomenon** — Chroma study: accuracy degrades as input grows longer across all 18 models. 30%+ degradation at mid-window positions.
+2. **A 1M token window is not the solution** — a bigger window just means a larger space for Context Rot to occur in. Effective usage is 60-70%.
+3. **Compaction is token-based** — auto-triggered at ~75% of model maximum. Preserves the last 4 messages, summarizes the rest.
+4. **Ralph's fresh context is best between loops** — use compaction inside a loop, full reset + state file handoff between loops.
+5. **40-70% of tokens are wasted** — cut costs with model routing (Haiku 60-70%), prompt caching (read at 0.1x), and keeping CLAUDE.md under 200 lines.
+6. **Initializer pattern** — manage state deterministically with a 2-phase structure: JSON feature list + claude-progress.txt + init.sh.
+
+## Further Reading
+
+- [Chroma: Context Window Research](https://research.trychroma.com/) — Empirical Context Rot study across 18 models
+- [Anthropic: Prompt Caching Documentation](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) — Cache pricing, TTL, and usage
+- [SkillReducer (arXiv:2603.29919)](https://arxiv.org/abs/2603.29919) — The less-is-more effect: compressing tool descriptions improves quality
+- [Simon Willison: YAML vs Token-Saving Formats](https://simonwillison.net/) — 9,649 experiments showing familiar formats outperform
